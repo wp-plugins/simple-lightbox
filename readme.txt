@@ -11,6 +11,8 @@ A simple and customizable Lightbox for Wordpress
 
 Simple Lightbox is a very simple and customizable lightbox that is easy to add to your Wordpress website
 
+[Lightbox Slideshow](http://www.justinbarkhuff.com/lab/lightbox_slideshow/) by Justin Barkhuff is used for client-side functionality.
+
 #### Customization
 Options for customizing the lightbox behavior are located in the **Settings > Media** admin menu in the **Lightbox Settings** section
 
