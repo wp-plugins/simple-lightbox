@@ -46,6 +46,10 @@ Send your questions to wp@archetyped.com
 1. Lightbox Options
 
 == Changelog ==
+= 1.2 =
+* Added: Option to group automatically activated links
+* Optimized: Lightbox caption retrieval
+
 = 1.1 =
 * Added: Enable/disable lightbox functionality by page type (Home, Pages/Posts, Archive, etc.)
 * Added: Automatically activate lightbox functionality for image links
