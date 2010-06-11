@@ -17,6 +17,7 @@ Options for customizing the lightbox behavior are located in the **Settings > Me
 * Enable/Disable Lightbox Functionality (Default: Enabled)
 * Enable Lightbox depending on Page Type (Home, Pages, Archive, etc.)
 * Automatically activate lightbox for links to images on page (no need to add `rel="lightbox"` attribute to link)
+* Group automatically-activated links (play as a slideshow)
 * Automatically Start Slideshow (Default: Enabled)
 * Slide Duration (Seconds) (Default: 6)
 * Loop through images (Default: Enabled)
