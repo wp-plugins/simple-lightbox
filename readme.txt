@@ -52,7 +52,7 @@ No upgrade notices
 
 == Frequently Asked Questions ==
 
-Send your questions to wp@archetyped.com or post a comment on [Simple Lightbox's official page](http://archetyped.com/tools/simple-lightbox/)
+Post your questions and comments on [Simple Lightbox's official page](http://archetyped.com/tools/simple-lightbox/)
 
 == Screenshots ==
 
