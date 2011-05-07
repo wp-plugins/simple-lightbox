@@ -21,9 +21,9 @@
 /**
  * Lightbox object
  */
-var Lightbox = null;
+var SLB = null;
 (function($) {
-Lightbox = {
+SLB = {
 	activeImage : null,
 	badObjects : ['select','object','embed'],
 	container : null,
@@ -40,6 +40,7 @@ Lightbox = {
 	slideShowTimer : null,
 	startImage : null,
 	prefix : 'slb',
+	checkedUrls : {},
 	
 	/**
 	 * Initialize lightbox instance
@@ -48,6 +49,8 @@ Lightbox = {
 	initialize: function(options) {
 		this.options = $.extend(true, {
 			animate : true, // resizing animations
+			validateLinks : false, //Validate links before adding them to lightbox
+			captionEnabled: true, //Display caption
 			captionSrc : true, //Use image source URI if title not set
 			autoPlay : true, // should slideshow start automatically
 			borderSize : 10, // if you adjust the padding in the CSS, you will need to update this variable
@@ -175,18 +178,31 @@ Lightbox = {
 	 * Add events to various UI elements
 	 */
 	setEvents: function() {
-		var t = this;
+		var t = this, delay = 500;
 		this.get('container,details').click(function(ev) {
 			ev.stopPropagation();
 		});
-		this.get('navPrev').click(function() {
+		
+		var clickP = function() {
+			t.get('navPrev').unbind('click').click(false);
+			setTimeout(function() {t.get('navPrev').click(clickP)}, delay);
 			t.showPrev();
 			return false;
+		};
+		this.get('navPrev').click(function(){
+			return clickP();
 		});
-		this.get('navNext').click(function() {
+		
+		var clickN = function() {
+			t.get('navNext').unbind('click').click(false);
+			setTimeout(function() {t.get('navNext').click(clickN)}, delay);
 			t.showNext();
 			return false;
+		};
+		this.get('navNext').click(function() {
+			return clickN();
 		});
+		
 		this.get('navSlideControl').click(function() {
 			t.toggleSlideShow();
 			return false;
@@ -223,19 +239,23 @@ Lightbox = {
 	 */
 	getCaption: function(imageLink) {
 			imageLink = $(imageLink);
-			var caption = imageLink.attr('title') || '';
-			if ( caption == '' ) {
-				var inner = $(imageLink).find('img').first();
-				if ( $(inner).length )
-					caption = $(inner).attr('title') || $(inner).attr('alt');
-				if ( !caption ) {
-					if ( imageLink.text().length )
-						caption = imageLink.text();
-					else if ( this.options.captionSrc )
-						caption = imageLink.attr('href');
+			var caption = '';
+			if (this.options.captionEnabled) {
+				caption = imageLink.attr('title') || '';
+				if (caption == '') {
+					var inner = $(imageLink).find('img').first();
+					if ($(inner).length) 
+						caption = $(inner).attr('title') || $(inner).attr('alt');
+					if (!caption) {
+						if (imageLink.text().length) 
+							caption = imageLink.text();
+						else 
+							if (this.options.captionSrc) 
+								caption = imageLink.attr('href');
+					}
+					if (!caption) 
+						caption = '';
 				}
-				if ( !caption )
-					caption = '';
 			}
 			return caption;
 	},
@@ -248,46 +268,132 @@ Lightbox = {
 		imageLink = $(imageLink);
 		this.hideBadObjects();
 
-		// stretch overlay to fill page and fade in
-		this.get('overlay')
-			.height($(document).height())
-			.fadeTo(this.overlayDuration, this.overlayOpacity);
 		this.imageArray = [];
-		this.groupName = null;
+		this.groupName = this.getGroup(imageLink);
 		
 		var rel = $(imageLink).attr('rel');
 		var imageTitle = '';
+		var t = this;
+		var groupTemp = {};
 		
-		// if image is NOT part of a group..
-		if (rel == this.relAttribute) {
-			// add single image to imageArray
-			imageTitle = this.getCaption(imageLink);
-			this.imageArray.push({'link':$(imageLink).attr('href'), 'title':imageTitle});			
-			this.startImage = 0;
-		} else {
-			// if image is part of a group..
+		this.fileExists($(imageLink).attr('href'),
+		function() { //File exists
+			// Stretch overlay to fill page and fade in
+			t.get('overlay')
+				.height($(document).height())
+				.fadeTo(t.overlayDuration, t.overlayOpacity);
 			
-			var els = $(this.container).find($(imageLink).get(0).tagName.toLowerCase());
-			// loop through anchors, find other images in group, and add them to imageArray
-			for (var i=0; i < els.length; i++) {
-				var el = $(els[i]);
-				if (el.attr('href') && (el.attr('rel') == rel)) {
-					imageTitle = this.getCaption(el);
-					this.imageArray.push({'link':el.attr('href'),'title':imageTitle});
+			// Add image to array closure
+			var addLink = function(el, idx) {
+				groupTemp[idx] = el;
+				return groupTemp.length;
+			};
+			
+			//Build final image array & launch lightbox
+			var proceed = function() {
+				t.startImage = 0;
+				//Sort links by document order
+				var order = [], el;
+				for (var x in groupTemp) {
+					order.push(x);
+				}
+				order.sort(function(a, b) { return (a - b); });
+				for (x = 0; x < order.length; x++) {
+					el = groupTemp[order[x]];
+					//Check if link being evaluated is the same as the clicked link
 					if ($(el).get(0) == $(imageLink).get(0)) {
-						this.startImage = this.imageArray.length - 1;
+						t.startImage = x;
+					}
+					t.imageArray.push({'link':$(el).attr('href'), 'title':t.getCaption(el)});
+				}
+				// Calculate top offset for the lightbox and display 
+				var lightboxTop = $(document).scrollTop() + ($(window).height() / 15);
+		
+				t.get('lightbox').css('top', lightboxTop + 'px').show();
+				t.changeImage(t.startImage);
+			}
+			
+			// If image is NOT part of a group..
+			if (null == t.groupName) {
+				// Add single image to imageArray
+				addLink(imageLink, 0);			
+				t.startImage = 0;
+				proceed();
+			} else {
+				// If image is part of a group
+				var els = $(t.container).find($(imageLink).get(0).tagName.toLowerCase());
+				// Loop through links on page & find other images in group
+				var grpLinks = [];
+				var i, el;
+				for (i = 0; i < els.length; i++) {
+					el = $(els[i]);
+					if (el.attr('href') && (t.getGroup(el) == t.groupName)) {
+						//Add links in same group to temp array
+						grpLinks.push(el);
 					}
 				}
+				
+				//Loop through group links, validate, and add to imageArray
+				var processed = 0;
+				for (i = 0; i < grpLinks.length; i++) {
+					el = grpLinks[i];
+					t.fileExists($(el).attr('href'),
+						function(args) { //File exists
+							var el = args.els[args.idx];
+							var il = addLink(el, args.idx);
+							processed++;
+							if (processed == args.els.length)
+								proceed();
+						},
+						function(args) { //File does not exist
+							processed++;
+							if (args.idx == args.els.length)
+								proceed(); 
+						},
+						{'idx': i, 'els': grpLinks});
+				}
+			}	
+		},
+		function() { //File does not exist
+			t.end();
+		});
+	},
+	
+	/**
+	 * Extract group name from 
+	 * @param obj el Element to extract group name from
+	 * @return string Group name
+	 */
+	getGroup: function(el) {
+		//Get full attribute value
+		var g = null;
+		var gTmp = '';
+		var gSt = '[';
+		var gEnd = ']';
+		var rel = $(el).attr('rel');
+		var search = this.relAttribute;
+		var searching = true;
+		var idx;
+		var prefix = ' ';
+		while (searching) {
+			idx = rel.indexOf(search);
+			//Stop processing if value is not found
+			if (idx == -1)
+				return g;
+			//Prefix with space to find whole word
+			if (prefix != search.charAt(0) && idx > 0) {
+				search = prefix + search;
+			} else {
+				searching = false;
 			}
-			// get group name
-			this.groupName = rel.substring(this.relAttribute.length + 1, rel.length - 1);
 		}
-
-		// calculate top offset for the lightbox and display 
-		var lightboxTop = $(document).scrollTop() + ($(window).height() / 15);
-
-		this.get('lightbox').css('top', lightboxTop + 'px').show();
-		this.changeImage(this.startImage);
+		gTmp = $.trim(rel.substring(idx).replace(search, ''));
+		//Check if group defined
+		if (gTmp.length && gSt == gTmp.charAt(0) && gTmp.indexOf(gEnd) != -1) {
+			//Extract group name
+			g = gTmp.substring(1, gTmp.indexOf(gEnd));
+		}
+		return g;
 	},
 
 	/**
@@ -316,12 +422,9 @@ Lightbox = {
 			if ( t.isSlideShowActive() )
 				t.startSlideShow();
 		});
-
-		imgPreloader.src = this.imageArray[this.activeImage].link;
 		
-		if (this.options.googleAnalytics) {
-			urchinTracker(this.imageArray[this.activeImage].link);
-		}
+		//Load image
+		imgPreloader.src = this.imageArray[this.activeImage].link;
 	},
 
 	/**
@@ -353,8 +456,12 @@ Lightbox = {
 	 * Display caption, image number, and bottom nav
 	 */
 	updateDetails: function() {
-		this.get('dataCaption').text(this.imageArray[this.activeImage].title);
-		this.get('dataCaption').show();
+		if (this.options.captionEnabled) {
+			this.get('dataCaption').text(this.imageArray[this.activeImage].title);
+			this.get('dataCaption').show();
+		} else {
+			this.get('dataCaption').hide();
+		}
 		
 		// if image is part of set display 'Image x of y' 
 		if (this.hasImages()) {
@@ -365,20 +472,12 @@ Lightbox = {
 			this.get('dataNumber')
 				.text(num_display)
 				.show();
-			if (!this.enableSlideshow) {
-				this.get('navSlideControl').hide();
-			}
-		} else {
-			// Hide navigation controls when only one image exists
-			this.get('navSlideControl').hide();
-			this.get('navPrev').hide();
-			this.get('navNext').hide();
 		}
 	
 		this.get('details').width(this.get('slbContent').width() + (this.options.borderSize * 2));
-		
+		this.updateNav();
 		var t = this;
-		this.get('details').animate({height: 'show', opacity: 'show'}, 650, function() {t.updateNav();});
+		this.get('details').animate({height: 'show', opacity: 'show'}, 650);
 	},
 	
 	/**
@@ -386,13 +485,24 @@ Lightbox = {
 	 */
 	updateNav: function() {
 		if (this.hasImages()) {
+			this.get('navPrev').show();
+			this.get('navNext').show();
 			if (this.enableSlideshow) {
+				this.get('navSlideControl').show();
 				if (this.playSlides) {
 					this.startSlideShow();
 				} else {
 					this.stopSlideShow();
 				}
+			} else {
+				this.get('navSlideControl').hide();
 			}
+		} else {
+			// Hide navigation controls when only one image exists
+			this.get('dataNumber').hide();
+			this.get('navPrev').hide();
+			this.get('navNext').hide();
+			this.get('navSlideControl').hide();
 		}
 		this.enableKeyboardNav();
 	},
@@ -539,14 +649,17 @@ Lightbox = {
 	 * Enable image navigation via the keyboard
 	 */
 	enableKeyboardNav: function() {
-		document.onkeydown = this.keyboardAction; 
+		var t = this;
+		$(document).keydown(function(e) {
+			t.keyboardAction(e);
+		});
 	},
 
 	/**
 	 * Disable image navigation via the keyboard
 	 */
 	disableKeyboardNav: function() {
-		document.onkeydown = '';
+		$(document).unbind('keydown');
 	},
 
 	/**
@@ -561,21 +674,20 @@ Lightbox = {
 		}
 
 		key = String.fromCharCode(keycode).toLowerCase();
-		var t = this;
-		
-		if (key == 'x' || key == 'o' || key == 'c') { // close lightbox
-			t.end();
+
+		if (keycode == 27 || key == 'x' || key == 'o' || key == 'c') { // close lightbox
+			this.end();
 		} else if (key == 'p' || key == '%') { // display previous image
-			t.showPrev();
+			this.showPrev();
 		} else if (key == 'n' || key =='\'') { // display next image
-			t.showNext();
+			this.showNext();
 		} else if (key == 'f') { // display first image
-			t.showFirst();
+			this.showFirst();
 		} else if (key == 'l') { // display last image
-			t.showLast();
+			this.showLast();
 		} else if (key == 's') { // toggle slideshow
-			if (t.hasImage() && t.options.enableSlideshow) {
-				t.toggleSlideShow();
+			if (this.hasImage() && this.options.enableSlideshow) {
+				this.toggleSlideShow();
 			}
 		}
 	},
@@ -683,6 +795,50 @@ Lightbox = {
 	 */
 	get: function(id) {
 		return $(this.getSel(id));
+	},
+	
+	/**
+	 * Checks if file exists using AJAX request
+	 * @param string url File URL
+	 * @param callback success Callback to run if file exists
+	 * @param callback failure Callback to run if file does not exist
+	 * @param obj args Arguments for callback
+	 */
+	fileExists: function(url, success, failure, args) {
+		if (!this.options.validateLinks)
+			return success(args);
+		var statusFail = 400;
+		var stateCheck = 4;
+		var t = this;
+		var proceed = function(res) {
+			if (res.status < statusFail) {
+				if ($.isFunction(success)) 
+					success(args);
+			} else {
+				if ($.isFunction(failure)) 
+					failure(args);
+			}
+		};
+		
+		//Check if URL already processed
+		if (url in this.checkedUrls) {
+			proceed(this.checkedUrls[url]);
+		} else {
+			var req = new XMLHttpRequest();
+			req.open('HEAD', url, true);
+			req.onreadystatechange = function() {
+				if (stateCheck == this.readyState) {
+					t.addUrl(url, this);
+					proceed(this);
+				}
+			};
+			req.send();
+		}
+	},
+	
+	addUrl: function(url, res) {
+		if (!(url in this.checkedUrls))
+			this.checkedUrls[url] = res;
 	}
 }
 })(jQuery);
