@@ -51,6 +51,7 @@ class SLB_Lightbox extends SLB_Base {
 			'enabled_page'				=> array('title' => 'Enable on Pages', 'default' => true, 'group' => 'activation'),
 			'enabled_archive'			=> array('title' => 'Enable on Archive Pages (tags, categories, etc.)', 'default' => true, 'group' => 'activation'),
 			'activate_links'			=> array('title' => 'Activate all image links in item content', 'default' => true, 'group' => 'activation'),
+			'activate_attachments'		=> array('title' => 'Activate all image attachment links', 'default' => true, 'group' => 'activation'),
 			'validate_links'			=> array('title' => 'Validate links', 'default' => false, 'group' => 'activation'),
 			'group_links'				=> array('title' => 'Group automatically activated links (for displaying as a slideshow)', 'default' => true, 'group' => 'grouping'),
 			'group_post'				=> array('title' => 'Group image links by Post (e.g. on pages with multiple posts)', 'default' => true, 'group' => 'grouping'),
@@ -346,14 +347,13 @@ class SLB_Lightbox extends SLB_Base {
 				global $post;
 				$types = (object) array('img' => 'image', 'att' => 'attachment');
 				$img_types = array('jpg', 'jpeg', 'gif', 'png');
+				$rgx = "/\b(\w+.*?)=\"(.*?)\"(?:\s|$)/i";
 				//Iterate through links & add lightbox if necessary
 				foreach ( $links as $link ) {
 					//Check if rel attribute exists
 					$link_new = $link;
-//					$this->debug->print_message('O: ' . $link_new);
 					//Parse link
 					$link_attr = substr($link_new, 2, strlen($link_new) - 3);
-					$rgx = "/\b(\w+.*?)=\"(.*?)\"(?:\s|$)/i";
 					$attr_matches = $attr = array();
 					preg_match_all($rgx, $link_attr, $attr_matches);
 					foreach ( $attr_matches[1] as $key => $val ) {
@@ -382,7 +382,10 @@ class SLB_Lightbox extends SLB_Base {
 						$type = $types->att;
 					if ( !$type )
 						continue;
-
+					
+					if ( $type == $types->att && !$this->options->get_value('activate_attachments') )
+						continue;
+						
 					//Process link
 					if ( empty($r) )
 						$r = array();
@@ -410,7 +413,6 @@ class SLB_Lightbox extends SLB_Base {
 					$r = implode(' ', $r);
 					
 					$link_new = '<a ' . $this->util->build_attribute_string($attr) . '>';
-//					$this->debug->print_message('N: ' . $link_new);
 					//Insert modified link
 					$content = str_replace($link, $link_new, $content);
 					unset($h, $r);
@@ -443,15 +445,6 @@ class SLB_Lightbox extends SLB_Base {
 		$out['script_start'] = '<script type="text/javascript">/* <![CDATA[ */(function($){$(document).ready(function(){';
 		$out['script_end'] = '})})(jQuery);/* ]]> */</script>';
 		$js_code = array();
-		//Activate links on page
-		if ( $this->options->get_value('activate_links') ) {
-			$rel = ( $this->options->get_value('group_links') ) ? 'lightbox[' . $this->get_prefix() . ']' : 'lightbox';
-			ob_start();
-			?>
-			$('a[href$=".jpg"]:not([rel~="lightbox"])','a[href$=".jpeg"]:not([rel~="lightbox"])','a[href$=".gif"]:not([rel~="lightbox"])','a[href$=".png"]:not([rel~="lightbox"])').each(function(i, el){if (! /(^|\b)lightbox\[.+\]($|\b)/i.test($(el).attr('rel'))){var rel=($(el).attr('rel').length > 0) ? $(el).attr('rel') + ' ' : '';$(el).attr('rel', =rel + '<?php echo $rel; ?>');}});
-			<?php
-			$test = ob_get_clean();
-		}
 		//Get options
 		$options = array(
 			'validateLinks'		=> $this->options->get_value('validate_links'),
@@ -462,14 +455,15 @@ class SLB_Lightbox extends SLB_Base {
 			'animate'			=> $this->options->get_value('animate'),
 			'captionEnabled'	=> $this->options->get_value('enabled_caption'),
 			'captionSrc'		=> $this->options->get_value('caption_src'),
-			'layout'			=> $this->get_theme_layout()
+			'layout'			=> $this->get_theme_layout(),
+			'altsrc'			=> $this->add_prefix('src')
 		);
 		$lb_obj = array();
 		foreach ($options as $option => $val) {
-			if ($val === TRUE || $val == 'on')
-				$val = 'true';
-			elseif ($val === FALSE || empty($val))
-				$val = 'false';
+			if ( is_bool($val) )
+				$val = ( $val ) ? 'true' : 'false';
+			elseif ( is_string($val) && "'" != $val[0] )
+				$val = "'" . $val . "'";
 			$lb_obj[] = "'{$option}':{$val}";
 		}
 		//Load UI Strings
