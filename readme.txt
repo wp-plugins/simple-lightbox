@@ -15,7 +15,7 @@ Simple Lightbox is a very simple and customizable lightbox that is easy to add t
 The current release is a beta version.  Please test and [provide feedback on the beta release page](http://archetyped.com/lab/slb-1-5-6-beta/).
 
 #### Beta 4
-* Fix: Options reset after update (KRazy Donna)
+* Fix: Options reset after update (KRazy Donna) 
 * Optimize: Improved IE compatibilility
 * Optimize: Improved data handling
 
