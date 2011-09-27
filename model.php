@@ -39,6 +39,15 @@ class SLB_Lightbox extends SLB_Base {
 	 * @var string
 	 */
 	var $attr_legacy = 'lightbox';
+
+	/**
+	 * Properties for media attachments in current request
+	 * Key (int) Attachment ID
+	 * Value (assoc-array) Attachment properties (url, etc.)
+	 * > source: Source URL
+	 * @var array
+	 */
+	var $media_attachments = array();
 	
 	/**
 	 * Options Configuration
@@ -71,6 +80,7 @@ class SLB_Lightbox extends SLB_Base {
 			'overlay_opacity'			=> array('title' => 'Overlay Opacity (0 - 1)', 'default' => '0.8', 'attr' => array('size' => 3, 'maxlength' => 3), 'group' => 'ui'),
 			'enabled_caption'			=> array('title' => 'Enable caption', 'default' => true, 'group' => 'ui'),
 			'caption_src'				=> array('title' => 'Use image URI as caption when link title not set', 'default' => true, 'group' => 'ui'),
+			'enabled_desc'				=> array('title' => 'Enable description', 'default' => true, 'group' => 'ui'),
 			'txt_closeLink'				=> array('title' => 'Close link (for accessibility only, image used for button)', 'default' => 'close', 'group' => 'labels'),
 			'txt_loadingMsg'			=> array('title' => 'Loading indicator', 'default' => 'loading', 'group' => 'labels'),
 			'txt_nextLink'				=> array('title' => 'Next Image link', 'default' => 'next &raquo;', 'group' => 'labels'),
@@ -144,6 +154,7 @@ class SLB_Lightbox extends SLB_Base {
 		//Init lightbox
 		add_action('wp_enqueue_scripts', $this->m('enqueue_files'));
 		add_action('wp_head', $this->m('client_init'));
+		add_action('wp_footer', $this->m('client_footer'), 99);
 		add_filter('the_content', $this->m('activate_post_links'), 99);
 		
 		/* Themes */
@@ -245,6 +256,8 @@ class SLB_Lightbox extends SLB_Base {
 		//Filter
 		if ( !$this->options->get_value('enabled_caption') )
 			$l = str_replace($this->get_theme_placeholder('dataCaption'), '', $l);
+		if ( !$this->options->get_value('enabled_desc') )
+			$l = str_replace($this->get_theme_placeholder('dataDescription'), '', $l);
 		return $l;
 	}
 	
@@ -337,8 +350,9 @@ class SLB_Lightbox extends SLB_Base {
 	 * @param $content
 	 */
 	function activate_post_links($content) {
+		global $wpdb;
 		//Check option
-		if ( ! is_feed() && $this->is_enabled() && $this->options->get_value('activate_links') ) {
+		if ( !is_feed() && $this->is_enabled() && $this->options->get_value('activate_links') ) {
 			$links = array();
 			//Get all links in content
 			$rgx = "/\<a[^\>]+href=.*?\>/i";
@@ -353,6 +367,8 @@ class SLB_Lightbox extends SLB_Base {
 				$rgx = "/\b(\w+.*?)=([\"'])(.*?)\\2(?:\s|$)/i";
 				//Iterate through links & add lightbox if necessary
 				foreach ( $links as $link ) {
+					$m_props = array();
+					$pid = 0;
 					//Check if rel attribute exists
 					$link_new = $link;
 					//Parse link
@@ -378,8 +394,15 @@ class SLB_Lightbox extends SLB_Base {
 						continue;
 					//Determine link type
 					$type = false;
-					if ( in_array($this->util->get_file_extension($h), $img_types) )
+					if ( $this->util->has_file_extension($h, $img_types) ) {
 						$type = $types->img;
+						//Check if item links to internal media (attachment)
+						if ( strpos($h, $domain) !== false ) {
+							$pid_temp = $wpdb->get_var($wpdb->prepare("SELECT post_id FROM $wpdb->postmeta WHERE `meta_key` = %s AND `meta_value` = %s LIMIT 1", '_wp_attached_file', basename($h)));
+							if ( is_numeric($pid_temp) )
+								$pid = intval($pid_temp);
+						}
+					}
 					elseif ( strpos($h, $domain) !== false && is_local_attachment($h) && ( $pid = url_to_postid($h) ) && wp_attachment_is_image($pid) ) 
 						$type = $types->att;
 					if ( !$type ) {
@@ -402,15 +425,39 @@ class SLB_Lightbox extends SLB_Base {
 					}
 					$r[] = $lb;
 					
-					//Type specific processing
-					switch ($type) {
-						case $types->att:
-							//Get attachment URL
-							$src = wp_get_attachment_url($pid);
-							if ( !empty($src) )
-								$r[] = $this->add_prefix('src[' . $src . ']');
-							break;
+					//Load properties for attachments
+					if ( !!$pid ) {
+						if ( !isset($this->media_attachments[$pid]) ) {
+							switch ($type) {
+								case $types->img:
+									$m_props['source'] = $h;
+									break;
+									
+								case $types->att:
+									//Source URL
+									$m_props['source'] = wp_get_attachment_url($pid);
+									break;
+							}
+															
+							//Retrieve attachment data
+							if ( $this->options->get_value('enabled_desc') ) {
+								$m_props['p'] = get_post($pid);
+								//Description
+								$m_props['desc'] = $m_props['p']->post_content;
+								//Clear attachment data
+								unset($m_props['p']);
+							}
+							
+							//Add attachment properties
+							if ( !empty($m_props['source']) )
+								$this->media_attachments[$pid] = $m_props;
+						}
+						
+						//Check again if attachment ID exists (in case it was just added to array)
+						if ( isset($this->media_attachments[$pid]) )
+							$r[] = $this->add_prefix('id[' . $pid . ']');
 					}
+					
 					
 					//Convert rel attribute to string
 					$r = implode(' ', $r);
@@ -431,8 +478,21 @@ class SLB_Lightbox extends SLB_Base {
 	function enqueue_files() {
 		if ( ! $this->is_enabled() )
 			return;
-		wp_enqueue_script($this->add_prefix('lib'), $this->util->get_file_url('js/lib.js'), array('jquery'), $this->util->get_plugin_version());
+		
+		$lib = 'js/' . ( ( WP_DEBUG ) ? 'dev/lib.dev.js' : 'lib.js' );
+		wp_enqueue_script($this->add_prefix('lib'), $this->util->get_file_url($lib), array('jquery'), $this->util->get_plugin_version());
 		wp_enqueue_style($this->add_prefix('style'), $this->get_theme_style(), array(), $this->util->get_plugin_version());
+	}
+	
+	/**
+	 * Build client (JS) object name
+	 * @return string Name of JS object
+	 */
+	function get_client_obj() {
+		static $obj = null;
+		if ( is_null($obj) )
+			$obj = strtoupper($this->get_prefix(''));
+		return $obj;
 	}
 	
 	/**
@@ -445,8 +505,8 @@ class SLB_Lightbox extends SLB_Base {
 			
 		$options = array();
 		$out = array();
-		$out['script_start'] = '<script type="text/javascript">/* <![CDATA[ */(function($){$(document).ready(function(){';
-		$out['script_end'] = '})})(jQuery);/* ]]> */</script>';
+		$out['script_start'] = '(function($){$(document).ready(function(){';
+		$out['script_end'] = '})})(jQuery);';
 		$js_code = array();
 		//Get options
 		$options = array(
@@ -458,6 +518,7 @@ class SLB_Lightbox extends SLB_Base {
 			'animate'			=> $this->options->get_value('animate'),
 			'captionEnabled'	=> $this->options->get_value('enabled_caption'),
 			'captionSrc'		=> $this->options->get_value('caption_src'),
+			'descEnabled'		=> $this->options->get_value('enabled_desc'),
 			'layout'			=> $this->get_theme_layout(),
 			'altsrc'			=> $this->add_prefix('src'),
 			'relAttribute'		=> array($this->get_prefix()),
@@ -466,39 +527,44 @@ class SLB_Lightbox extends SLB_Base {
 		//Backwards compatibility
 		if ( $this->options->get_value('enabled_compat'))
 			$options['relAttribute'][] = $this->attr_legacy;
-		$lb_obj = array();
-		foreach ($options as $option => $val) {
-			if ( is_bool($val) )
-				$val = ( $val ) ? 'true' : 'false';
-			elseif ( is_string($val) && "'" != $val[0] )
-				$val = "'" . $val . "'";
-			elseif ( is_array($val) ) {
-				$val = "['" . implode("','", $val) . "']";
-			}
-			$lb_obj[] = "'{$option}':{$val}";
-		}
+			
 		//Load UI Strings
 		if ( ($strings = $this->build_strings()) && !empty($strings) )
-			$lb_obj[] = $strings;
-		$js_code[] = 'SLB.initialize({' . implode(',', $lb_obj) . '});';
-		echo $out['script_start'] . implode('', $js_code) . $out['script_end'];
+			$options['strings'] = $strings;
+		$js_code[] = $this->get_client_obj() . '.initialize(' . json_encode($options) . ');';
+		$js_out = $out['script_start'] . implode('', $js_code) . $out['script_end'];
+		echo $this->util->build_script_element($js_out, $this->add_prefix('init'));
+	}
+	
+	/**
+	 * Output code in footer
+	 * > Media attachment URLs
+	 */
+	function client_footer() {
+		if ( !$this->is_enabled() )
+			return;
+		//Media attachments
+		if ( !empty($this->media_attachments) ) {
+			$atch_out = $this->get_client_obj() . '.media = ' . json_encode($this->media_attachments) . ';';
+			echo $this->util->build_script_element($atch_out, $this->add_prefix('media'));
+		}
 	}
 	
 	/**
 	 * Build JS object of UI strings when initializing lightbox
-	 * @return string JS object of UI strings
+	 * @return array UI strings
 	 */
 	function build_strings() {
-		$ret = '';
+		$ret = array();
+		//Get all UI options
 		$prefix = 'txt_';
 		$opt_strings = array_filter(array_keys($this->options->get_items()), create_function('$opt', 'return ( strpos($opt, "' . $prefix . '") === 0 );'));
-		if ( $opt_strings ) {
-			$strings = array();
+		if ( count($opt_strings) ) {
+			//Build array of UI options
 			foreach ( $opt_strings as $key ) {
 				$name = substr($key, strlen($prefix));
-				$strings[] = "'" . $name . "':'" . $this->options->get_value($key) . "'";
+				$ret[$name] = $this->options->get_value($key);
 			}
-			$ret = "'strings':{" . implode(',', $strings) . "}";
 		}
 		return $ret;
 	}

@@ -2,34 +2,35 @@
 Contributors: Archetyped
 Donate link: http://archetyped.com/tools/simple-lightbox/#donate
 Tags: lightbox, gallery, photography, images, theme, template, style
-Requires at least: 3.1.2
-Tested up to: 3.2
+Requires at least: 3.2.1
+Tested up to: 3.2.1
 Stable tag: trunk
 
 A simple, themeable, and customizable Lightbox for Wordpress
 
 == Description ==
-Simple Lightbox is a very simple and customizable lightbox that is easy to add to your Wordpress website.  It also [supports themes](http://archetyped.com/lab/slb-registering-themes/), so it can be fully integrated with your site's theme.
+Simple Lightbox is a very simple and customizable lightbox that is easy to add to your Wordpress website.  It also [supports skins](http://archetyped.com/lab/slb-registering-themes/), so it can be fully integrated with your site's theme.
 
-#### Customization
+#### Features
 Options for customizing the lightbox behavior are located in the **Settings > Media** admin menu in the **Lightbox Settings** section (or just click the **Settings** link below the plugin's name when viewing the list of installed plugins)
 
-* **New: Image Attachment Link Support**
-* **New: Backwards-compatibility with legacy lightbox links**
-* Theme Support
-* Keyboard Navigation
-* Enable Lightbox depending on Page Type (Home, Pages, Archive, etc.)
-* Link Validation (optional)
+* **Supports Image Attachment links**
+* **Display image metadata (caption, description, etc.) in lightbox**
 * Automatically activate links (no manual coding required)
+* Keyboard Navigation
+* Link Validation (optional)
+* User-customizable skin (template) support
+* Enable Lightbox depending on Page Type (Home, Pages, Archive, etc.)
 * Group image links (play as a slideshow)
 * Group image links by Post (e.g. separate slideshow for each post on home page)
 * UI/Animation Customization
 * Slideshow Customization
+* Backwards-compatibility with legacy lightbox links
 
 #### Usage
 1. Insert links to images/image attachments into your posts/pages
 
-**That’s it! The image will be displayed in a lightbox automatically.**
+**That's it! The image will be displayed in a lightbox automatically.**
 
 * For more usage tips, go to [Simple Lightbox's official page](http://archetyped.com/tools/simple-lightbox/)
 
@@ -51,6 +52,23 @@ Post your questions and comments on [Simple Lightbox's official page](http://arc
 2. Customized UI Text
 
 == Changelog ==
+
+= 1.5.6 =
+* Add: Display image description in lightbox (with HTML support)
+* Add: Support for W3 Total Cache plugin
+* Add: Initial support for NextGEN galleries
+* Update: **Important:** [System Requirements](http://wordpress.org/about/requirements/) aligned with WP 3.2.1
+* Optimize: Improved support for small images in default template
+* Optimize: Support for non-English text in user options
+* Optimize: Improved IE compatibility
+* Optimize: Improved data handling
+* Optimize: Skin loading performance
+* Optimize: Skin CSS Cleanup
+* Optimize: Caption support for galleries
+* Optimize: Options code cleanup (Juga Sweep)
+* Fix: User-defined UI text not used (Ivan gets Even (cooler))
+* Fix: Options reset after update (KRazy Donna)
+
 = 1.5.5.1 =
 * Fix: Disabled links not being disabled (Disabling Sascha)
 

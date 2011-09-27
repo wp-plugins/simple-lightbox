@@ -154,12 +154,14 @@ class SLB_Options extends SLB_Field_Collection {
 			//Get current version
 			$vn = $this->util->get_plugin_version();
 			//Compare versions
-			if ( strcasecmp($vo, $vn) < 0 ) {
-				//Migrate
-				$this->migrate();
-				
+			if ( $vo != $vn ) {
 				//Update saved version
 				$this->set_version($vn);
+				//Migrate old version to new version
+				if ( strcasecmp($vo, $vn) < 0 ) {
+					//Migrate
+					$this->migrate();
+				}
 			}
 		}
 		return $this->version_checked;
@@ -293,17 +295,6 @@ class SLB_Options extends SLB_Field_Collection {
 	
 	function validate($values) {
 		if ( is_array($values) ) {
-			//Get option group being validated
-			/*
-			$group = '';
-			$filter = 'sanitize_option_';
-			$option = str_replace($filter, '', current_filter());
-			if ( $this->get_id() == $this->remove_prefix($option) ) {
-				$group = '';
-			} else {
-				$group = substr($option, strlen($this->add_prefix($this->get_id())) + 1); 
-			}
-			*/
 			//Format data based on option type (bool, string, etc.)
 			foreach ( $values as $id => $val ) {
 				//Get default
@@ -362,9 +353,9 @@ class SLB_Options extends SLB_Field_Collection {
 	 */
 	function load_data() {
 		if ( !$this->data_fetched ) {
-			$this->data_fetched = true;
 			//Retrieve data
 			$this->data = $this->fetch_data();
+			$this->data_fetched = true;
 		}
 	}
 	

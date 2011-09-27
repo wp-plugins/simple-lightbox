@@ -14,10 +14,7 @@
 //
 //	Licensed under the Creative Commons Attribution 2.5 License - http://creativecommons.org/licenses/by/2.5/
 //
-//	The code inserts HTML at the bottom of the page for displaying content in a non-modal dialog
-//
 // -----------------------------------------------------------------------------------
-
 /**
  * Lightbox object
  */
@@ -41,6 +38,7 @@ SLB = {
 	startImage : null,
 	prefix : '',
 	checkedUrls : {},
+	media : {},
 	
 	/**
 	 * Initialize lightbox instance
@@ -52,6 +50,7 @@ SLB = {
 			validateLinks : false, //Validate links before adding them to lightbox
 			captionEnabled: true, //Display caption
 			captionSrc : true, //Use image source URI if title not set
+			descEnabled: true, //Display description
 			autoPlay : true, // should slideshow start automatically
 			borderSize : 10, // if you adjust the padding in the CSS, you will need to update this variable
 			containerID : document, // lightbox container object
@@ -67,6 +66,7 @@ SLB = {
 			showGroupName : false, // show group name of images in image details
 			slideTime : 4, // time to display images during slideshow
 			altsrc : 'src',
+			mId : 'id',
 			strings : { // allows for localization
 				closeLink : 'close',
 				loadingMsg : 'loading',
@@ -85,6 +85,7 @@ SLB = {
 				navNext: '<a class="slb_navNext slb_nav" href="#">&raquo; next</a>',
 				navSlideControl: '<a class="slb_navSlideControl" href="#">Stop</a>',
 				dataCaption: '<span class="slb_dataCaption"></span>',
+				dataDescription: '<span class="slb_dataDescription"></span>',
 				dataNumber: '<span class="slb_dataNumber"></span>'
 			},
 			layout : null
@@ -249,33 +250,6 @@ SLB = {
 	},
 	
 	/**
-	 * Build caption for displayed caption
-	 * @param {Object} imageLink
-	 */
-	getCaption: function(imageLink) {
-			imageLink = $(imageLink);
-			var caption = '';
-			if (this.options.captionEnabled) {
-				caption = imageLink.attr('title') || '';
-				if (caption == '') {
-					var inner = $(imageLink).find('img').first();
-					if ($(inner).length) 
-						caption = $(inner).attr('title') || $(inner).attr('alt');
-					if (!caption) {
-						if (imageLink.text().length) 
-							caption = imageLink.text();
-						else 
-							if (this.options.captionSrc) 
-								caption = imageLink.attr('href');
-					}
-					if (!caption) 
-						caption = '';
-				}
-			}
-			return caption;
-	},
-
-	/**
 	 * Display overlay and lightbox. If image is part of a set, add siblings to imageArray.
 	 * @param node imageLink Link element containing image URL
 	 */
@@ -318,7 +292,7 @@ SLB = {
 					if ($(el).get(0) == $(imageLink).get(0)) {
 						t.startImage = x;
 					}
-					t.imageArray.push({'link':t.getSourceFile($(el)), 'title':t.getCaption(el)});
+					t.imageArray.push({'link':t.getSourceFile($(el)), 'title':t.getCaption(el), 'desc': t.getDescription(el)});
 				}
 				// Calculate top offset for the lightbox and display 
 				var lightboxTop = $(document).scrollTop() + ($(window).height() / 15);
@@ -329,7 +303,7 @@ SLB = {
 			
 			// If image is NOT part of a group..
 			if (null == t.groupName) {
-				// Add single image to imageArray
+			// Add single image to imageArray
 				addLink(imageLink, 0);			
 				t.startImage = 0;
 				proceed();
@@ -374,6 +348,138 @@ SLB = {
 	},
 	
 	/**
+	 * Retrieve ID of media item
+	 * @param {Object} el Link element
+	 * @return int Media ID (Default: 0 - No ID)
+	 */
+	getMediaId: function(el) {
+		var rel = $(el).attr('rel') || '',
+			mId = 0;
+		if (rel.length) {
+			var reId = new RegExp('\\b' + this.addPrefix(this.options.mId) + '\\[(.+?)\\](?:\\b|$)');
+			if (reId.test(rel)) {
+				mId = reId.exec(rel)[1];
+			}
+		}
+		return mId;
+	},
+	
+	/**
+	 * Retrieve Media properties
+	 * @param {Object} el Link element
+	 * @return Object (Default: Empty)
+	 */
+	getMediaProperties: function(el) {
+		var props = {},
+			mId = this.getMediaId(el);
+		if (mId in this.media) {
+			props = this.media[mId];
+		}
+		return props;
+	},
+	
+	/**
+	 * Retrieve single property for media item
+	 * @param {Object} el Link element
+	 * @param string prop Property to retrieve
+	 * @return mixed Item property (Default: false)
+	 */
+	getMediaProperty: function(el, prop) {
+		var props = this.getMediaProperties(el);
+		return (prop in props) ? props[prop] : false;
+	},
+	
+	/**
+	 * Build caption for displayed caption
+	 * @param {Object} imageLink
+	 */
+	getCaption: function(imageLink) {
+		imageLink = $(imageLink);
+		var caption = '';
+		if (this.options.captionEnabled) {
+			var sels = {
+				'capt': '.wp-caption-text',
+				'gIcon': '.gallery-icon'
+			};
+			var els = {
+				'link': imageLink,
+				'origin': imageLink,
+				'sibs': null,
+				'img': null
+			}
+			//WP Caption
+			if ( $(els.link).parent(sels.gIcon).length > 0 ) {
+				els.origin = $(els.link).parent();
+			}
+			if ( (els.sibs = $(els.origin).siblings(sels.capt)) && $(els.sibs).length > 0 ) {
+				caption = $(els.sibs).first().text();
+			}
+			caption = $.trim(caption);
+			//Fall back to image properties
+			if ( '' == caption ) {
+				els.img = $(els.link).find('img').first();
+				if ( $(els.img).length ) {
+					//Image title / alt
+					caption = $(els.img).attr('title') || $(els.img).attr('alt');
+				}
+			}
+			caption = $.trim(caption);
+			//Fall back Link Text
+			if ('' == caption) {
+				if ($.trim($(sels.link).text()).length) {
+					caption = $.trim($(sels.link).text());
+				} else if (this.options.captionSrc) {
+					//Fall back to Link href
+					caption = $(sels.link).attr('href');
+				}
+			}
+			caption = $.trim(caption);
+		}
+		return caption;
+	},
+	
+	/**
+	 * Retrieve item description
+	 * @param {Object} imageLink
+	 * @return string Item description (Default: empty string)
+	 */
+	getDescription: function(imageLink) {
+		var desc = '';
+		if (this.options.descEnabled) {
+			//Retrieve description
+			if (this.inGallery(imageLink, 'ng')) {
+				desc = $(imageLink).attr('title');
+			}
+			else 
+				desc = this.getMediaProperty(imageLink, 'desc');
+			
+			if (!desc)
+				desc = '';
+		}
+		return desc;
+	},
+	
+	/**
+	 * Check if current link is part of a gallery
+	 * @param {Object} imageLink
+	 * @param string gType Gallery type to check for
+	 * @return bool Whether link is part of a gallery
+	 */
+	inGallery: function(imageLink, gType) {
+		var ret = false;
+		var galls = {
+			'wp': '.gallery-icon',
+			'ng': '.ngg-gallery-thumbnail'
+		};
+		
+		
+		if ( typeof gType == 'undefined' || !(gType in galls) ) {
+			gType = 'wp';
+		}
+		return ( ( $(imageLink).parent(galls[gType]).length > 0 ) ? true : false );
+	},
+	
+	/**
 	 * Retrieve source URI in link
 	 * @param {Object} el
 	 * @return string Source file URI
@@ -381,9 +487,19 @@ SLB = {
 	getSourceFile: function(el) {
 		var src = $(el).attr('href');
 		var rel = $(el).attr('rel') || '';
-		var reSrc = new RegExp('\\b' + this.options.altsrc + '\\[(.+?)\\](?:\\b|$)');
-		if ( reSrc.test(rel) ) {
-			src = reSrc.exec(rel)[1];
+		if (rel.length) {
+			//Attachment source
+			relSrc = this.getMediaProperty(el, 'source');
+			//Explicit source
+			if (!relSrc || !relSrc.length) {
+				var reSrc = new RegExp('\\b' + this.addPrefix(this.options.altsrc) + '\\[(.+?)\\](?:\\b|$)');
+				if (reSrc.test(rel)) {
+					relSrc = reSrc.exec(rel)[1];
+				}
+			}
+			//Set source using rel-derived value
+			if ( relSrc.length )
+				src = relSrc;
 		}
 		return src;
 	},
@@ -488,12 +604,16 @@ SLB = {
 	 * Display caption, image number, and bottom nav
 	 */
 	updateDetails: function() {
+		//Caption
 		if (this.options.captionEnabled) {
 			this.get('dataCaption').text(this.imageArray[this.activeImage].title);
 			this.get('dataCaption').show();
 		} else {
 			this.get('dataCaption').hide();
 		}
+		
+		//Description
+		this.get('dataDescription').html(this.imageArray[this.activeImage].desc);
 		
 		// if image is part of set display 'Image x of y' 
 		if (this.hasImages()) {

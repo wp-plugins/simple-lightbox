@@ -330,9 +330,11 @@ class SLB_Field_Base extends SLB_Base {
 		$formats = $this->get_id_formats();
 		
 		//Setup options
+		$wrap_default = array('open' => '', 'close' => '', 'segment_open' => '', 'segment_close' => '');
+		
 		$options_default = array(
 			'format'			=> null,
-			'wrap'				=> array('open' => '', 'close' => '', 'segment_open' => '', 'segment_close' => ''),
+			'wrap'				=> array(),
 			'segments_pre'		=> null,
 			'prefix'			=> '',
 			'recursive'			=> false
@@ -341,15 +343,16 @@ class SLB_Field_Base extends SLB_Base {
 		//Load options based on format
 		if ( !is_array($options) )
 			$options = array('format' => $options);
-		if ( is_string($options['format']) && isset($formats[$options['format']]) )
+		if ( isset($options['format']) && is_string($options['format']) && isset($formats[$options['format']]) )
 			$options_default = wp_parse_args($formats[$options['format']], $options_default);
 		else
 			unset($options['format']);
 		$options = wp_parse_args($options, $options_default);
+		//Import options into function
 		extract($options);
 
 		//Validate options
-		$wrap = wp_parse_args($wrap, $options_default['wrap']);
+		$wrap = wp_parse_args($wrap, $wrap_default);
 		
 		if ( !is_array($segments_pre) )
 			$segments_pre = array($segments_pre);
@@ -540,7 +543,7 @@ class SLB_Field_Base extends SLB_Base {
 		if ( empty($parent) && !is_string($this->parent) )
 			return false;
 		//Parent passed as object reference wrapped in array
-		if ( is_array($parent) && is_object($parent[0]) )
+		if ( is_array($parent) && isset($parent[0]) && is_object($parent[0]) )
 			$parent =& $parent[0];
 		
 		//No parent set but parent ID (previously) set in object
@@ -931,7 +934,7 @@ class SLB_Field_Base extends SLB_Base {
 	 */
 	function format_form($value) {
 		if ( is_string($value) )
-			$value = htmlentities($value);
+			$value = htmlspecialchars($value);
 		return $value;
 	}
 }
@@ -1355,7 +1358,7 @@ class SLB_Field_Type extends SLB_Field_Base {
 			$out = $out_default;
 		}
 		/* Return generated value */
-		return implode('', array($this->build_pre(), $out, $this->build_post()));
+		return $out;
 	}
 }
 
