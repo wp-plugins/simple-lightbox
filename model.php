@@ -26,12 +26,17 @@ class SLB_Lightbox extends SLB_Base {
 	 */
 	var $options_admin_page = 'options-media.php';
 	
-	/**
+	/**`
 	 * Page that processes options
 	 * @var string
 	 */
 	var $options_admin_form = 'options.php';
 	
+	/**
+	 * Value to identify activated links
+	 * Formatted on initialization
+	 * @var string
+	 */
 	var $attr = null;
 	
 	/**
@@ -42,12 +47,29 @@ class SLB_Lightbox extends SLB_Base {
 
 	/**
 	 * Properties for media attachments in current request
-	 * Key (int) Attachment ID
-	 * Value (assoc-array) Attachment properties (url, etc.)
-	 * > source: Source URL
+	 * > Key (string) Attachment URI
+	 * > Value (assoc-array) Attachment properties (url, etc.)
+	 *   > source: Source URL
 	 * @var array
 	 */
 	var $media_attachments = array();
+	
+	/**
+	 * Raw media items
+	 * Used for populating media object on client-side
+	 * > Key: Item URI
+	 * > Value: Associative array of media properties
+	 * 	 > type: Item type (Default: null)
+	 * 	 > id: Item ID (Default: null)
+	 * @var array
+	 */
+	var $media_items_raw = array();
+
+	/**
+	 * Media types
+	 * @var array
+	 */
+	var $media_types = array('img' => 'image', 'att' => 'attachment');
 	
 	/* Instance members */
 	
@@ -59,9 +81,12 @@ class SLB_Lightbox extends SLB_Base {
 	
 	/**
 	 * Base field definitions
+	 * Stores system/user-defined field definitions
 	 * @var SLB_Fields
 	 */
 	var $fields = null;
+	
+	var $h_temp = array();
 	
 	/*-** Init **-*/
 	
@@ -71,8 +96,6 @@ class SLB_Lightbox extends SLB_Base {
 	
 	function __construct() {
 		parent::__construct();
-		load_plugin_textdomain($this->get_prefix(), false,	$this->util->get_plugin_file_path('lang', array(false, false)));
-		$this->init_options();
 		$this->init();
 
 		//Init objects
@@ -80,9 +103,23 @@ class SLB_Lightbox extends SLB_Base {
 		$this->fields =& new SLB_Fields();
 	}
 	
+	function init_env() {
+		//Localization
+		$ldir = 'l10n';
+		$lpath_abs = $this->util->get_file_path($ldir);
+		if ( is_dir($lpath_abs) ) {
+			load_plugin_textdomain($this->util->get_plugin_base(true), false, $this->util->get_plugin_file_path($ldir, array(false, false)));
+		}
+		//Options
+		$func_opts = 'init_options';
+		if ( isset($this) && method_exists($this, $func_opts) ) {
+			call_user_func($this->m($func_opts));
+		}
+	}
+	
 	function init_options() {
 		//Setup options
-		$p = $this->get_prefix();
+		$p = $this->util->get_plugin_base(true);
 		$options_config = array (
 			'groups' 	=> array (
 				'activation'	=> __('Activation', $p),
@@ -132,7 +169,7 @@ class SLB_Lightbox extends SLB_Base {
 		$opt_theme['default'] = $this->theme_default = $this->add_prefix($this->theme_default);
 		$opt_theme['options'] = $this->m('get_theme_options');
 		
-		$this->options =& new SLB_Options('options', $options_config);
+		$this->options =& new SLB_Options($options_config);
 	}
 	
 	function register_hooks() {
@@ -156,11 +193,13 @@ class SLB_Lightbox extends SLB_Base {
 		add_action('wp_enqueue_scripts', $this->m('enqueue_files'));
 		add_action('wp_head', $this->m('client_init'));
 		add_action('wp_footer', $this->m('client_footer'), 99);
-		if ( $this->options->get_bool('group_gallery') ) {
-			add_filter('the_content', $this->m('gallery_wrap'), 1);
-			add_filter('the_content', $this->m('gallery_unwrap'), 100);
-		}
-		add_filter('the_content', $this->m('activate_links'), 99);
+		//Link activation
+		$priority = 99;
+		add_filter('the_content', $this->m('activate_links'), $priority);
+		//Gallery wrapping
+		add_filter('the_content', $this->m('gallery_wrap'), 1);
+		add_filter('the_content', $this->m('gallery_unwrap'), $priority + 1);
+		
 		
 		/* Themes */
 		$this->util->add_action('init_themes', $this->m('init_default_themes'));
@@ -186,7 +225,7 @@ class SLB_Lightbox extends SLB_Base {
 				$opt = 'archive';
 			//Check option
 			if ( !empty($opt) && ( $opt = 'enabled_' . $opt ) && $this->options->has($opt) ) {
-				$ret = ( $this->options->get_value($opt) ) ? true : false;
+				$ret = $this->options->get_bool($opt);
 			}
 		}
 		return $ret;
@@ -378,6 +417,9 @@ class SLB_Lightbox extends SLB_Base {
 	 * @return string Modified post content
 	 */
 	function gallery_wrap($content) {
+		//Stop processing if option not enabled
+		if ( !$this->options->get_bool('group_gallery') )
+			return $content;
 		global $shortcode_tags;
 		//Save default shortcode handlers to temp variable
 		$sc_temp = $shortcode_tags;
@@ -420,14 +462,43 @@ class SLB_Lightbox extends SLB_Base {
 	 * @return string Modified post content
 	 */
 	function gallery_unwrap($content) {
-		/*
+		//Stop processing if option not enabled
+		if ( !$this->options->get_bool('group_gallery') )
+			return $content;
 		$w = $this->group_get_wrapper();
 		if ( strpos($content, $w->open) !== false ) {
 			$content = str_replace($w->open, '', $content);
 			$content = str_replace($w->close, '', $content);
 		}
-		*/
 		return $content;
+	}
+	
+	/**
+	 * Retrieve supported media types
+	 * @return object Supported media types
+	 */
+	function get_media_types() {
+		static $t = null;
+		if ( is_null($t) )
+			$t = (object) $this->media_types;
+		return $t;
+	}
+	
+	/**
+	 * Check if media type is supported
+	 * @param string $type Media type
+	 * @return bool If media type is supported
+	 */
+	function is_media_type_supported($type) {
+		$ret = false;
+		$t = $this->get_media_types();
+		foreach ( $t as $n => $v ) {
+			if ( $type == $v ) {
+				$ret = true;
+				break;
+			}
+		}
+		return $ret;
 	}
 	
 	/**
@@ -435,49 +506,52 @@ class SLB_Lightbox extends SLB_Base {
 	 * 
 	 * Lightbox will not be activated for feeds
 	 * @param $content
+	 * @return string Post content
 	 */
 	function activate_links($content) {
 		//Activate links only if enabled
-		if ( $this->is_enabled() ) {
-			$groups = array();
-			$w = $this->group_get_wrapper();
-			$g_ph_f = '[%s]';
+		if ( !$this->is_enabled() ) {
+			return $content;
+		}
+		
+		$groups = array();
+		$w = $this->group_get_wrapper();
+		$g_ph_f = '[%s]';
 
-			//Strip gallery links (if necessary)
-			if ( $this->options->get_bool('group_gallery') ) {
-				$groups = array();
-				$g_idx = 0;
-				$g_end_idx = 0;
-				//Iterate through galleries
-				while ( ($g_start_idx = strpos($content, $w->open, $g_end_idx)) && $g_start_idx !== false 
-						&& ($g_end_idx = strpos($content, $w->close, $g_start_idx)) && $g_end_idx != false ) {
-					$g_start_idx += strlen($w->open);
-					//Extract gallery content & save for processing
-					$g_len = $g_end_idx - $g_start_idx;
-					$groups[$g_idx] = substr($content, $g_start_idx, $g_len);
-					//Replace content with placeholder
-					$g_ph = sprintf($g_ph_f, $g_idx);
-					$content = substr_replace($content, $g_ph, $g_start_idx, $g_len);
-					//Increment gallery count
-					$g_idx++;
-					//Update end index
-					$g_end_idx = $g_start_idx + strlen($w->open);
-				}
+		//Strip groups
+		if ( $this->options->get_bool('group_gallery') ) {
+			$groups = array();
+			$g_idx = 0;
+			$g_end_idx = 0;
+			//Iterate through galleries
+			while ( ($g_start_idx = strpos($content, $w->open, $g_end_idx)) && $g_start_idx !== false 
+					&& ($g_end_idx = strpos($content, $w->close, $g_start_idx)) && $g_end_idx != false ) {
+				$g_start_idx += strlen($w->open);
+				//Extract gallery content & save for processing
+				$g_len = $g_end_idx - $g_start_idx;
+				$groups[$g_idx] = substr($content, $g_start_idx, $g_len);
+				//Replace content with placeholder
+				$g_ph = sprintf($g_ph_f, $g_idx);
+				$content = substr_replace($content, $g_ph, $g_start_idx, $g_len);
+				//Increment gallery count
+				$g_idx++;
+				//Update end index
+				$g_end_idx = $g_start_idx + strlen($w->open);
 			}
-			
-			//General link processing
-			$content = $this->process_links($content);
-			
-			//Reintegrate Groups
-			foreach ( $groups as $group => $g_content ) {
-				$g_ph = $w->open . sprintf($g_ph_f, $group) . $w->close;
-				//Skip group if placeholder does not exist in content
-				if ( strpos($content, $g_ph) === false ) {
-					continue;
-				}
-				//Replace placeholder with processed content
-				$content = str_replace($g_ph, $w->open . $this->process_links($g_content, $group) . $w->close, $content);
+		}
+		
+		//General link processing
+		$content = $this->process_links($content);
+		
+		//Reintegrate Groups
+		foreach ( $groups as $group => $g_content ) {
+			$g_ph = $w->open . sprintf($g_ph_f, $group) . $w->close;
+			//Skip group if placeholder does not exist in content
+			if ( strpos($content, $g_ph) === false ) {
+				continue;
 			}
+			//Replace placeholder with processed content
+			$content = str_replace($g_ph, $w->open . $this->process_links($g_content, $group) . $w->close, $content);
 		}
 		return $content;
 	}
@@ -505,104 +579,109 @@ class SLB_Lightbox extends SLB_Base {
 	 * @return string Content with processed links 
 	 */
 	function process_links($content, $group = null) {
-		global $wpdb;
 		$links = $this->get_links($content, true);
 		//Process links
 		if ( count($links) > 0 ) {
+			global $wpdb;
 			global $post;
-			$types = (object) array('img' => 'image', 'att' => 'attachment');
+			$types = $this->get_media_types();
 			$img_types = array('jpg', 'jpeg', 'gif', 'png');
+			$protocol = array('http://', 'https://');
+			$domain = str_replace($protocol, '', strtolower(get_bloginfo('url')));
 			
 			//Format Group
-			$g = ( is_null($group) || 0 == strlen(trim($group)) ) ? '' : '_g_' . $group;
-			if ( $this->options->get_bool('group_links') ) {
-				$g = ( ( $this->options->get_bool('group_post') ) ? $this->add_prefix($post->ID) : $this->get_prefix() ) . $g;
-			}
-			$lb_base = $lb = $this->attr;
-			if ( !empty($g) ) {
-				$lb .= '[' . $g . ']';
+			$group_base = ( !is_scalar($group) ) ? '' : trim(strval($group));
+			if ( !$this->options->get_bool('group_links') ) {
+				$group_base = null;
 			}
 			
 			//Iterate through links & add lightbox if necessary
 			foreach ( $links as $link ) {
 				//Init vars
-				$m_props = array();
 				$pid = 0;
 				$link_new = $link;
+				$internal = false;
+				$group = $group_base;
 				
 				//Parse link attributes
 				$attr = $this->util->parse_attribute_string($link_new, array('rel' => '', 'href' => ''));
 				$h =& $attr['href'];
 				$r =& $attr['rel'];
+				$attrs_all = $this->get_attributes($r, false);
+				$attrs = $this->get_attributes($attrs_all);
 				
-				//Stop processing link if lightbox attribute has already been set
-				if ( empty($h) || '#' == $h || ( !empty($r) && ( strpos($r, $lb_base) !== false || strpos($r, $this->add_prefix('off')) !== false || strpos($r, $this->attr_legacy) !== false ) ) )
+				//Stop processing invalid, disabled, or legacy links
+				if ( empty($h) 
+					|| 0 === strpos($h, '#') 
+					|| $this->has_attribute($attrs, $this->make_attribute_disabled())
+					|| $this->has_attribute($attrs_all, $this->attr_legacy, false) 
+					)
 					continue;
+				
+				//Check if item links to internal media (attachment)
+				$hdom = str_replace($protocol, '', strtolower($h));
+				if ( strpos($hdom, $domain) === 0 ) {
+					//Save URL for further processing
+					$internal = true;
+				}
+				
 				//Determine link type
 				$type = false;
-				$domain = str_replace(array('http://', 'https://'), '', get_bloginfo('url'));
-				if ( $this->util->has_file_extension($h, $img_types) ) {
+				
+				//Check if link has already been processed
+				if ( $internal && $this->media_item_cached($h) ) {
+					$i = $this->get_cached_media_item($h);
+					$type = $i['type'];
+				}
+				
+				elseif ( $this->util->has_file_extension($h, $img_types) ) {
+					//Direct Image file
 					$type = $types->img;
-					//Check if item links to internal media (attachment)
-					if ( strpos($h, $domain) !== false ) {
-						$pid_temp = $wpdb->get_var($wpdb->prepare("SELECT post_id FROM $wpdb->postmeta WHERE `meta_key` = %s AND `meta_value` = %s LIMIT 1", '_wp_attached_file', basename($h)));
-						if ( is_numeric($pid_temp) )
-							$pid = intval($pid_temp);
-					}
 				}
-				elseif ( strpos($h, $domain) !== false && is_local_attachment($h) && ( $pid = url_to_postid($h) ) && wp_attachment_is_image($pid) ) 
+				
+				elseif ( $internal && is_local_attachment($h) && ( $pid = url_to_postid($h) ) && wp_attachment_is_image($pid) ) {
+					//Attachment URI
 					$type = $types->att;
-				if ( !$type ) {
-					continue;
 				}
 				
-				if ( $type == $types->att && !$this->options->get_bool('activate_attachments') )
+				//Stop processing if link type not valid
+				if ( !$type || ( $type == $types->att && !$this->options->get_bool('activate_attachments') ) )
 					continue;
+				
+				//Set group (if necessary)
+				if ( $this->options->get_bool('group_links') ) {
+					//Get preset group attribute
+					$g_name = $this->make_attribute_name('group');
+					$g = ( $this->has_attribute($attrs, $g_name) ) ? $this->get_attribute($attrs, $g_name) : $this->get_attribute($attrs, $this->attr); 
 					
-				//Process rel attribute
-				if ( empty($r) )
-					$r = array();
-				else
-					$r = explode(' ', trim($r));
-				
-				$r[] = $lb;
-				
-				//Load properties for attachments
-				if ( !!$pid ) {
-					if ( !isset($this->media_attachments[$pid]) ) {
-						switch ($type) {
-							case $types->img:
-								$m_props['source'] = $h;
-								break;
-								
-							case $types->att:
-								//Source URL
-								$m_props['source'] = wp_get_attachment_url($pid);
-								break;
-						}
-														
-						//Retrieve attachment data
-						if ( $this->options->get_bool('enabled_desc') ) {
-							$m_props['p'] = get_post($pid);
-							//Description
-							$m_props['desc'] = $m_props['p']->post_content;
-							//Clear attachment data
-							unset($m_props['p']);
-						}
-						
-						//Add attachment properties
-						if ( !empty($m_props['source']) )
-							$this->media_attachments[$pid] = $m_props;
+					if ( is_string($g) && ($g = trim($g)) && strlen($g) )
+						$group = $g;
+					
+					//Group links by post?
+					if ( $this->options->get_bool('group_post') ) {
+						if ( strlen($group) )
+							$group = '_' . $group; 
+						$group = $this->add_prefix($post->ID . $group);
 					}
-					
-					//Check again if attachment ID exists (in case it was just added to array)
-					if ( isset($this->media_attachments[$pid]) )
-						$r[] = $this->add_prefix('id[' . $pid . ']');
+					//Set group attribute
+					if ( is_string($group) && !empty($group) ) {
+						$attrs = $this->set_attribute($attrs, $g_name, $group);
+					}
 				}
 				
+				//Activate link
+				$attrs = $this->set_attribute($attrs, $this->attr);
+				
+				//Process internal links
+				if ( $internal ) {
+					//Mark as internal
+					$attrs = $this->set_attribute($attrs, 'internal');
+					//Add to media items array
+					$this->cache_media_item($h, $type, $pid);
+				}
 				
 				//Convert rel attribute to string
-				$r = implode(' ', $r);
+				$r = $this->build_attributes(array_merge($attrs_all, $attrs));
 				
 				//Update link in content
 				$link_new = '<a ' . $this->util->build_attribute_string($attr) . '>';
@@ -611,6 +690,230 @@ class SLB_Lightbox extends SLB_Base {
 			}
 		}
 		return $content;
+	}
+	
+	/**
+	 * Generates link attributes from array
+	 * @param array $attrs Link Attributes
+	 * @return string Attribute string
+	 */
+	function build_attributes($attrs) {
+		$a = array();
+		//Validate attributes
+		$attrs = $this->get_attributes($attrs, false);
+		//Iterate through attributes and build output array
+		foreach ( $attrs as $key => $val ) {
+			//Standard attributes
+			if ( is_bool($val) && $val ) {
+				$a[] = $key;
+			}
+			//Attributes with values
+			elseif ( is_string($val) ) {
+				$a[] = $key . '[' . $val . ']';
+			}
+		}
+		return implode(' ', $a);
+	}
+
+	/**
+	 * Build attribute name
+	 * Makes sure name is only prefixed once
+	 * @return string Formatted attribute name 
+	 */
+	function make_attribute_name($name = '') {
+		$sep = '_';
+		$name = trim($name);
+		//Generate valid name
+		if ( $name != $this->attr ) {
+			//Use default name
+			if ( empty($name) )
+				$name = $this->attr;
+			//Add prefix if not yet set
+			elseif ( strpos($name, $this->attr . $sep) !== 0 )
+				$name = $this->attr . $sep . $name;
+		}
+		return $name;
+	}
+
+	/**
+	 * Create attribute to disable lightbox for current link
+	 * @return string Disabled lightbox attribute
+	 */
+	function make_attribute_disabled() {
+		static $ret = null;
+		if ( is_null($ret) ) {
+			$ret = $this->make_attribute_name('off');
+		}
+		return $ret;
+	}
+	
+	/**
+	 * Set attribute to array
+	 * Attribute is added to array if it does not exist
+	 * @param array $attrs Current attribute array
+	 * @param string $name Name of attribute to add
+	 * @param string (optional) $value Attribute value
+	 * @return array Updated attribute array
+	 */
+	function set_attribute($attrs, $name, $value = null) {
+		//Validate attribute array
+		$attrs = $this->get_attributes($attrs, false);
+		//Build attribute name
+		$name = $this->make_attribute_name($name);
+		//Set attribute
+		$attrs[$name] = true;
+		if ( !empty($value) && is_string($value) )
+			$attrs[$name] = $value;
+		return $attrs;
+	}
+	
+	/**
+	 * Convert attribute string into array
+	 * @param string $attr_string Attribute string
+	 * @param bool (optional) $internal Whether only internal attributes should be evaluated (Default: TRUE)
+	 * @return array Attributes as associative array
+	 */
+	function get_attributes($attr_string, $internal = true) {
+		$ret = array();
+		//Protect bracketed values prior to parsing attributes string
+	 	if ( is_string($attr_string) ) {
+	 		$attr_string = trim($attr_string);
+	 		$attr_vals = array();
+			$attr_keys = array();
+			$offset = 0;
+	 		while ( ($bo = strpos($attr_string,'[', $offset)) && $bo !== false
+	 			&& ($bc = strpos($attr_string,']', $bo)) && $bc !== false
+				) {
+	 			//Push all preceding attributes into array
+	 			$attr_temp = explode(' ', substr($attr_string, $offset, $bo));
+				//Get attribute name
+				$name = array_pop($attr_temp);
+				$attr_keys = array_merge($attr_keys, $attr_temp);
+				//Add to values array
+				$attr_vals[$name] = substr($attr_string, $bo+1, $bc-$bo-1);
+				//Update offset
+				$offset = $bc+1;
+	 		}
+			//Parse remaining attributes
+			$attr_keys = array_merge($attr_keys, array_filter(explode(' ', substr($attr_string, $offset))));
+			//Set default values for all keys
+			$attr_keys = array_fill_keys($attr_keys, TRUE);
+			//Merge attributes with values
+			$ret = array_merge($attr_keys, $attr_vals);
+	 	} elseif ( is_array($attr_string) )
+			$ret = $attr_string;
+		
+		//Filter non-internal attributes if necessary
+		if ( $internal && is_array($ret) ) {
+			foreach ( array_keys($ret) as $attr ) {
+				if ( $attr == $this->attr)
+					continue;
+				if ( strpos($attr, $this->attr . '_') !== 0 )
+					unset($ret[$attr]);
+			}
+		}
+		
+		return $ret;
+	}
+	
+	/**
+	 * Retrieve attribute value
+	 * @param string|array $attrs Attributes to retrieve attribute value from
+	 * @param string $attr Attribute name to retrieve
+	 * @param bool (optional) $internal Whether only internal attributes should be evaluated (Default: TRUE)
+	 * @return string|bool Attribute value (Default: FALSE)
+	 */
+	function get_attribute($attrs, $attr, $internal = true) {
+		$ret = false;
+		$attrs = $this->get_attributes($attrs, $internal);
+		//Validate attribute name for internal attributes
+		if ( $internal )
+			$attr = $this->make_attribute_name($attr);
+		if ( isset($attrs[$attr]) ) {
+			$ret = $attrs[$attr];
+		}
+		return $ret;
+	}
+	
+	/**
+	 * Checks if attribute exists
+	 * @param string|array $attrs Attributes to retrieve attribute value from
+	 * @param string $attr Attribute name to retrieve
+	 * @param bool (optional) $internal Whether only internal attributes should be evaluated (Default: TRUE)
+	 * @return bool Whether or not attribute exists
+	 */
+	function has_attribute($attrs, $attr, $internal = true) {
+		return ( $this->get_attribute($attrs, $attr, $internal) !== false ) ? true : false;
+	}
+	
+	/**
+	 * Cache media properties for later processing
+	 * @param string $uri URI for internal media (e.g. direct uri, attachment uri, etc.) 
+	 * @param string $type Media type (image, attachment, etc.)
+	 * @param int (optional) $id ID of media item (if available) (Default: NULL)
+	 */
+	function cache_media_item($uri, $type, $id = null) {
+		//Normalize URI
+		$uri = strtolower($uri);
+		//Cache media item
+		if ( $this->is_media_type_supported($type) && !$this->media_item_cached($uri) ) {
+			//Set properties
+			$i = array('type' => null, 'id' => null, 'source' => null);
+			//Type
+			$i['type'] = $type;
+			$t = $this->get_media_types();
+			//Source
+			if ( $type == $t->img )
+				$i['source'] = $uri;
+			//ID
+			if ( is_numeric($id) )
+				$i['id'] = absint($id);
+			
+			$this->media_items_raw[$uri] = $i;
+		}
+	}
+	
+	/**
+	 * Checks if media item has already been cached
+	 * @param string $uri URI of media item
+	 * @return boolean Whether media item has been cached
+	 */
+	function media_item_cached($uri) {
+		$ret = false;
+		if ( !$uri || !is_string($uri) )
+			return $ret;
+		$uri = strtolower($uri);
+		return ( isset($this->media_items_raw[$uri]) ) ? true : false;
+	}
+	
+	/**
+	 * Retrieve cached media item
+	 * @param string $uri Media item URI
+	 * @return array|null Media item properties (NULL if not set)
+	 */
+	function get_cached_media_item($uri) {
+		$ret = null;
+		$uri = strtolower($uri);
+		if ( $this->media_item_cached($uri) ) {
+			$ret = $this->media_items_raw[$uri];
+		}
+		return $ret;
+	}
+	
+	/**
+	 * Retrieve cached media items
+	 * @return array Cached media items
+	 */
+	function get_cached_media_items() {
+		return $this->media_items_raw;
+	}
+	
+	/**
+	 * Check if media items have been cached
+	 * @return boolean
+	 */
+	function has_cached_media_items() {
+		return ( count($this->media_items_raw) > 0 ) ? true : false; 
 	}
 	
 	/**
@@ -643,7 +946,6 @@ class SLB_Lightbox extends SLB_Base {
 	function client_init() {
 		if ( ! $this->is_enabled() )
 			return;
-			
 		$options = array();
 		$out = array();
 		$out['script_start'] = '(function($){$(document).ready(function(){';
@@ -685,8 +987,106 @@ class SLB_Lightbox extends SLB_Base {
 	 * > Media attachment URLs
 	 */
 	function client_footer() {
-		if ( !$this->is_enabled() )
+		//Stop if not enabled or if there are no media items to process
+		if ( !$this->is_enabled() || !$this->has_cached_media_items() )
 			return;
+		
+		global $wpdb;
+		
+		//Separate media into buckets by type
+		$m_bucket = array();
+		$type = $id = null;
+		$props = (object) array('id' => 'id');
+		$m_items = $this->get_cached_media_items();
+		foreach ( $m_items as $uri => $p ) {
+			$type = $p['type'];
+			if ( empty($type) )
+				continue;
+			if ( !isset($m_bucket[$type]) )
+				$m_bucket[$type] = array();
+			//Add to bucket
+			$m_bucket[$type][$uri] =& $m_items[$uri];
+		}
+		
+		//Process links by type
+		$t = $this->get_media_types();
+
+		//Direct image links
+		if ( isset($m_bucket[$t->img]) ) {
+			$b =& $m_bucket[$t->img];
+			$uris_base = array();
+			foreach ( array_keys($b) as $uri ) {
+				$uris_base[basename($uri)] = $uri;
+			}
+			
+			//Retrieve attachment IDs
+			$uris_flat = "('" . implode("','", array_keys($uris_base)) . "')";
+			$q = $wpdb->prepare("SELECT post_id, meta_value FROM $wpdb->postmeta WHERE `meta_key` = %s AND LOWER(`meta_value`) IN $uris_flat LIMIT %d", '_wp_attached_file', count($b));
+			$pids_temp = $wpdb->get_results($q);
+			
+			//Match IDs with URIs
+			foreach ( $pids_temp as $pd ) {
+				$f = strtolower($pd->meta_value);
+				if ( is_numeric($pd->post_id) && isset($uris_base[$f]) ) {
+					$b[$uris_base[$f]]['id'] = absint($pd->post_id);
+				}
+			}
+			//Destroy worker vars
+			unset($b, $uri, $uris_base, $uris_flat, $q, $pids_temp);
+		}
+		
+		//Image attachments
+		if ( isset($m_bucket[$t->att]) ) {
+			$b =& $m_bucket[$t->att];
+			//Attachment source URI
+			foreach ( $b as $uri => $p ) {
+				$s = wp_get_attachment_url($p['id']);
+				if ( !!$s )
+					$b[$uri]['source'] = $s;
+			}
+			//Destroy worker vars
+			unset($b);
+		}
+		
+		//Retrieve attachment properties
+		$ids = array();
+		foreach ( $m_items as $uri => $p ) {
+			//Add post ID to query
+			if ( isset($p[$props->id]) ) {
+				$id = $p[$props->id];
+				//Create array for ID (support multiple URIs per ID)
+				if ( !isset($ids[$id]) ) {
+					$ids[$id] = array();
+				}
+				//Add URI to ID
+				$ids[$id][] = $uri;
+			}
+		}
+		//Retrieve attachments
+		$atts = get_posts(array('post_type' => 'attachment', 'include' => array_keys($ids)));
+		foreach ( $atts as $att ) {
+			if ( !isset($ids[$att->ID]) )
+				continue;
+			//Add attachment
+			//Set properties
+			$m = array(
+				'title' => $att->post_title,
+				'desc'	=> $att->post_content,
+			);
+			//Add dimensions
+			if ( wp_attachment_is_image($att->ID) ) {
+				$d = wp_get_attachment_image_src($att->ID, '');
+				if ( is_array($d) && count($d) >= 3 ) {
+					list($m['source'], $m['width'], $m['height']) = $d;
+				}
+			}
+			
+			//Save to object
+			foreach ( $ids[$att->ID] as $uri ) {
+				$this->media_attachments[$uri] = $m;
+			}
+		}
+		
 		//Media attachments
 		if ( !empty($this->media_attachments) ) {
 			$atch_out = $this->get_client_obj() . '.media = ' . json_encode($this->media_attachments) . ';';
