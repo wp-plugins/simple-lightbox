@@ -3,7 +3,7 @@ Contributors: Archetyped
 Donate link: http://archetyped.com/tools/simple-lightbox/#donate
 Tags: lightbox, gallery, photography, images, theme, template, style
 Requires at least: 3.2.1
-Tested up to: 3.2.1
+Tested up to: 3.3
 Stable tag: trunk
 
 A simple, themeable, and customizable Lightbox for Wordpress
@@ -14,6 +14,13 @@ Simple Lightbox is a very simple and customizable lightbox that is easy to add t
 ### BETA NOTES
 The current release is a beta version.  Please test and [provide feedback on the beta release page](http://archetyped.com/lab/slb-1-6-beta/).
 Main changes
+
+#### Beta 5
+* Add: Option to process links in Widgets
+* Add: WordPress 3.3 support
+* Optimize: Image metadata loading performance
+* Fix: YouTube embed using iFrame overlaps lightbox (Elena in Hiding)
+* Fix: Inconsistent loading of image metadata
 
 #### Beta 4
 * Optimize: File loading
@@ -62,7 +69,7 @@ Options for customizing the lightbox behavior are located in the **Settings > Me
 == Installation ==
 
 1. Install and activate via admin dashboard
-1. Verify that your site’s theme uses the `wp_head()`, `wp_footer()`, & `the_content()` template tags (standard in any professional theme)
+1. Verify that your site's theme uses the `wp_head()`, `wp_footer()`, & `the_content()` template tags (standard in any professional theme)
 
 == Upgrade Notice ==
 

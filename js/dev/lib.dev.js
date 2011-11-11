@@ -18,11 +18,10 @@
 /**
  * Lightbox object
  */
-var SLB = null;
 (function($) {
 SLB = {
 	activeImage : null,
-	badObjects : ['select','object','embed'],
+	badObjects : ['select','object','embed','iframe'],
 	container : null,
 	enableSlideshow : null,
 	groupName : null,
@@ -415,6 +414,11 @@ SLB = {
 					//Image title / alt
 					caption = $(els.img).attr('title') || $(els.img).attr('alt');
 				}
+			}
+			caption = $.trim(caption);
+			//Media properties
+			if ( '' == caption ) {
+				caption = this.getMediaProperty(els.link, 'title');
 			}
 			caption = $.trim(caption);
 			//Fall back Link Text
