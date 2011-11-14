@@ -84,7 +84,13 @@ class SLB_Lightbox extends SLB_Base {
 	 * @var string
 	 */
 	var $widget_callback_orig = 'callback_orig';
-	
+
+	/**
+	 * Used to track if widget is currently being processed or not
+	 * @var bool
+	 */
+	var $widget_processing = false;
+
 	/* Instance members */
 	
 	/**
@@ -210,6 +216,8 @@ class SLB_Lightbox extends SLB_Base {
 		add_action('admin_notices', $this->m('admin_notices'));
 		//Plugin listing
 		add_filter('plugin_action_links_' . $this->util->get_plugin_base_name(), $this->m('admin_plugin_action_links'), 10, 4);
+		add_action('in_plugin_update_message-' . $this->util->get_plugin_base_name(), $this->m('admin_plugin_update_message'), 10, 2);
+		add_filter('site_transient_update_plugins', $this->m('admin_plugin_update_transient'));
 		
 		/* Client-side */
 		
@@ -238,9 +246,13 @@ class SLB_Lightbox extends SLB_Base {
 
 	/**
 	 * Output current context to client-side
+	 * @uses `wp_head` action as hook
+	 * @uses `admin_head` action as hook
 	 * @return void
 	 */
 	function set_client_context() {
+		if ( !$this->is_enabled() )
+			return false;
 		$ctx = new stdClass();
 		$ctx->context = $this->util->get_context();
 		echo $this->util->build_script_element($this->util->extend_client_object($ctx), 'context');
@@ -284,7 +296,7 @@ class SLB_Lightbox extends SLB_Base {
 	function sidebars_widgets($sidebars_widgets) {
 		global $wp_registered_widgets;
 		static $widgets_processed = false;
-		if ( is_admin() || empty($wp_registered_widgets) || $widgets_processed || !is_object($this->options) || !$this->options->get_bool('enabled_widget') )
+		if ( is_admin() || empty($wp_registered_widgets) || $widgets_processed || !is_object($this->options) || !$this->is_enabled() || !$this->options->get_bool('enabled_widget') )
 			return $sidebars_widgets; 
 		$widgets_processed = true;
 		//Fetch active widgets from all sidebars
@@ -309,11 +321,13 @@ class SLB_Lightbox extends SLB_Base {
 	
 	/**
 	 * Widget display handler
-	 * Widget output is rerouted to this method by sidebar_widgets()
+	 * Original widget display handler is called inside of an output buffer & links in output are processed before sending to browser 
 	 * @param array $args Widget instance properties
 	 * @param int (optional) $widget_args Additional widget args (usually the widget's instance number)
 	 * @see WP_Widget::display_callback() for more information
+	 * @see sidebars_widgets() for callback modification
 	 * @global $wp_registered_widgets
+	 * @uses widget_process_links() to Process links in widget content
 	 * @return void
 	 */
 	function widget_callback($args, $widget_args = 1) {
@@ -326,12 +340,14 @@ class SLB_Lightbox extends SLB_Base {
 		if ( !isset($w[$this->widget_callback_orig]) || !($cb = $w[$this->widget_callback_orig]) || !is_callable($cb) )
 			return false;
 		$params = func_get_args();
+		$this->widget_processing = true;
 		//Start output buffer
 		ob_start();
 		//Call original callback
 		call_user_func_array($cb, $params);
 		//Flush output buffer
 		echo $this->widget_process_links(ob_get_clean(), $wid);
+		$this->widget_processing = false;
 	}
 	
 	/**
@@ -527,10 +543,14 @@ class SLB_Lightbox extends SLB_Base {
 	
 	/**
 	 * Wraps galleries for grouping
+	 * @uses `the_content` Filter hook
+	 * @uses gallery_wrap_callback to Wrap shortcodes for grouping
 	 * @param string $content Post content
 	 * @return string Modified post content
 	 */
 	function gallery_wrap($content) {
+		if ( !$this->is_enabled() )
+			return $content;
 		//Stop processing if option not enabled
 		if ( !$this->options->get_bool('group_gallery') )
 			return $content;
@@ -572,10 +592,13 @@ class SLB_Lightbox extends SLB_Base {
 	
 	/**
 	 * Removes wrapping from galleries
+	 * @uses `the_content` filter hook
 	 * @param $content Post content
 	 * @return string Modified post content
 	 */
 	function gallery_unwrap($content) {
+		if ( !$this->is_enabled() )
+			return $content;
 		//Stop processing if option not enabled
 		if ( !$this->options->get_bool('group_gallery') )
 			return $content;
@@ -635,7 +658,7 @@ class SLB_Lightbox extends SLB_Base {
 		//Strip groups
 		if ( $this->options->get_bool('group_gallery') ) {
 			$groups = array();
-			$g_idx = 0;
+			static $g_idx = 1;
 			$g_end_idx = 0;
 			//Iterate through galleries
 			while ( ($g_start_idx = strpos($content, $w->open, $g_end_idx)) && $g_start_idx !== false 
@@ -665,7 +688,7 @@ class SLB_Lightbox extends SLB_Base {
 				continue;
 			}
 			//Replace placeholder with processed content
-			$content = str_replace($g_ph, $w->open . $this->process_links($g_content, $group) . $w->close, $content);
+			$content = str_replace($g_ph, $w->open . $this->process_links($g_content, 'gallery_' . $group) . $w->close, $content);
 		}
 		return $content;
 	}
@@ -688,6 +711,8 @@ class SLB_Lightbox extends SLB_Base {
 	
 	/**
 	 * Process links in content
+	 * @global obj $wpdb DB instance
+	 * @global obj $post Current post
 	 * @param string $content Text containing links
 	 * @param string (optional) $group Group to add links to (Default: none)
 	 * @return string Content with processed links 
@@ -707,7 +732,7 @@ class SLB_Lightbox extends SLB_Base {
 			$domain = str_replace($protocol, '', strtolower(get_bloginfo('url')));
 			
 			//Format Group
-			$group_base = ( !is_scalar($group) ) ? '' : trim(strval($group));
+			$group_base = ( is_scalar($group) ) ? trim(strval($group)) : '';
 			if ( !$this->options->get_bool('group_links') ) {
 				$group_base = null;
 			}
@@ -767,23 +792,27 @@ class SLB_Lightbox extends SLB_Base {
 				
 				//Set group (if necessary)
 				if ( $this->options->get_bool('group_links') ) {
+					//Normalize group
+					if ( !is_string($group) )
+						$group = '';
 					//Get preset group attribute
 					$g_name = $this->make_attribute_name('group');
 					$g = ( $this->has_attribute($attrs, $g_name) ) ? $this->get_attribute($attrs, $g_name) : $this->get_attribute($attrs, $this->attr); 
 					
 					if ( is_string($g) && ($g = trim($g)) && strlen($g) )
 						$group = $g;
-					
 					//Group links by post?
-					if ( $this->options->get_bool('group_post') ) {
-						if ( strlen($group) )
-							$group = '_' . $group; 
-						$group = $this->add_prefix($post->ID . $group);
+					if ( !$this->widget_processing && $this->options->get_bool('group_post') ) {
+						$group = ( strlen($group) ) ? '_' . $group : '';
+						$group = $post->ID . $group;
 					}
+					
+					if ( empty($group) ) {
+						$group = $this->get_prefix();
+					}
+					
 					//Set group attribute
-					if ( is_string($group) && !empty($group) ) {
-						$attrs = $this->set_attribute($attrs, $g_name, $group);
-					}
+					$attrs = $this->set_attribute($attrs, $g_name, $group);
 				}
 				
 				//Activate link
@@ -970,8 +999,6 @@ class SLB_Lightbox extends SLB_Base {
 	 * @param int (optional) $id ID of media item (if available) (Default: NULL)
 	 */
 	function cache_media_item($uri, $type, $id = null) {
-		//Normalize URI
-		$uri = strtolower($uri);
 		//Cache media item
 		if ( $this->is_media_type_supported($type) && !$this->media_item_cached($uri) ) {
 			//Set properties
@@ -999,7 +1026,6 @@ class SLB_Lightbox extends SLB_Base {
 		$ret = false;
 		if ( !$uri || !is_string($uri) )
 			return $ret;
-		$uri = strtolower($uri);
 		return ( isset($this->media_items_raw[$uri]) ) ? true : false;
 	}
 	
@@ -1010,7 +1036,6 @@ class SLB_Lightbox extends SLB_Base {
 	 */
 	function get_cached_media_item($uri) {
 		$ret = null;
-		$uri = strtolower($uri);
 		if ( $this->media_item_cached($uri) ) {
 			$ret = $this->media_items_raw[$uri];
 		}
@@ -1030,7 +1055,7 @@ class SLB_Lightbox extends SLB_Base {
 	 * @return boolean
 	 */
 	function has_cached_media_items() {
-		return ( count($this->media_items_raw) > 0 ) ? true : false; 
+		return ( !empty($this->media_items_raw) ) ? true : false; 
 	}
 	
 	/**
@@ -1139,7 +1164,7 @@ class SLB_Lightbox extends SLB_Base {
 			//Match IDs with URIs
 			if ( $pids_temp ) {
 				foreach ( $pids_temp as $pd ) {
-					$f = strtolower($pd->meta_value);
+					$f = $pd->meta_value;
 					if ( is_numeric($pd->post_id) && isset($uris_base[$f]) ) {
 						$b[$uris_base[$f]][$props->id] = absint($pd->post_id);
 					}
@@ -1290,6 +1315,50 @@ class SLB_Lightbox extends SLB_Base {
 	}
 	
 	/**
+	 * Adds additional message for plugin updates
+	 * @var array $plugin_data Current plugin data
+	 * @var object $r Update response data
+	 */
+	function admin_plugin_update_message($plugin_data, $r) {
+		if ( !isset($r->new_version) )
+			return false;
+		if ( stripos($r->new_version, 'beta') !== false ) {
+			$cls_notice = $this->add_prefix('notice');
+			echo '<br />' . $this->admin_plugin_update_get_message($r);
+		}
+	}
+	
+	/**
+	 * Modify update plugins response data if necessary
+	 * @param obj $transient Transient data
+	 * @return obj Modified transient data
+	 */
+	function admin_plugin_update_transient($transient) {
+		$n = $this->util->get_plugin_base_name();
+		if ( isset($transient->response) && isset($transient->response[$n]) && is_object($transient->response[$n]) && !isset($transient->response[$n]->upgrade_notice) ) {
+			$r =& $transient->response[$n];
+			$r->upgrade_notice = $this->admin_plugin_update_get_message($r);
+		}
+		return $transient;
+	}
+	
+	/**
+	 * Retrieve custom update message
+	 * @param obj $r Response data from plugin update API
+	 * @return string Message (Default: empty string)
+	 */
+	function admin_plugin_update_get_message($r) {
+		$msg = '';
+		$cls_notice = $this->add_prefix('notice');
+		if ( !is_object($r) || !isset($r->new_version) )
+			return $msg;
+		if ( stripos($r->new_version, 'beta') !== false ) {
+			$msg = "<strong class=\"$cls_notice\">Notice:</strong> This update is a <strong class=\"$cls_notice\">Beta version</strong>. It is highly recommended that you test the update on a test server before updating the plugin on a production server.";
+		}
+		return $msg;
+	}
+	
+	/**
 	 * Reset plugin settings
 	 * Redirects to referring page upon completion
 	 */
@@ -1346,7 +1415,7 @@ class SLB_Lightbox extends SLB_Base {
 		$page = 'media';
 		$section = $this->get_prefix();
 		//Section
-		add_settings_section($section, '<span id="' . $this->admin_get_settings_section() . '">' . __('Lightbox Settings', $this->get_prefix()) . '</span>', $this->m('admin_section'), $page);
+		add_settings_section($section, '<div id="' . $this->admin_get_settings_section() . '">' . __('Lightbox Settings', $this->get_prefix()) . '</div>', $this->m('admin_section'), $page);
 		//Register settings container
 		register_setting($page, $this->add_prefix('options'), $this->options->m('validate'));
  	}
@@ -1357,7 +1426,7 @@ class SLB_Lightbox extends SLB_Base {
  	 */
 	function admin_enqueue_files() {
 		//Enqueue custom CSS for options page
-		if ( is_admin() && basename($_SERVER['SCRIPT_NAME']) == $this->options_admin_page ) {
+		if ( is_admin() && ( basename($_SERVER['SCRIPT_NAME']) == $this->options_admin_page || $this->util->is_context('admin_page_plugins'))  ) {
 			wp_enqueue_style($this->add_prefix('admin'), $this->util->get_file_url('css/admin.css'), array(), $this->util->get_plugin_version());
 		}
 	}
