@@ -1,6 +1,6 @@
 === Simple Lightbox ===
 Contributors: Archetyped
-Donate link: http://archetyped.com/tools/simple-lightbox/#donate
+Donate link: https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=AF29GFAFMT83N
 Tags: lightbox, gallery, photography, images, theme, template, style
 Requires at least: 3.2.1
 Tested up to: 3.3
