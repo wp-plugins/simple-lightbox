@@ -120,7 +120,7 @@ class SLB_Lightbox extends SLB_Base {
 
 		//Init objects
 		$this->attr = $this->get_prefix();
-		$this->fields =& new SLB_Fields();
+		$this->fields = new SLB_Fields();
 	}
 	
 	/* Init */
@@ -202,7 +202,7 @@ class SLB_Lightbox extends SLB_Base {
 		$opt_theme['default'] = $this->theme_default = $this->add_prefix($this->theme_default);
 		$opt_theme['options'] = $this->m('get_theme_options');
 		
-		$this->options =& new SLB_Options($options_config);
+		$this->options = new SLB_Options($options_config);
 	}
 	
 	function register_hooks() {
@@ -1068,7 +1068,8 @@ class SLB_Lightbox extends SLB_Base {
 		if ( ! $this->is_enabled() )
 			return;
 		
-		$lib = 'js/' . ( ( ( defined('WP_DEBUG') && WP_DEBUG ) || isset($_REQUEST[$this->add_prefix('debug')]) ) ? 'dev/lib.dev.js' : 'lib.js' );
+		//$lib = 'js/' . ( ( ( defined('WP_DEBUG') && WP_DEBUG ) || isset($_REQUEST[$this->add_prefix('debug')]) ) ? 'dev/lib.dev.js' : 'lib.js' );
+		$lib = 'js/lib.js';
 		wp_enqueue_script($this->add_prefix('lib'), $this->util->get_file_url($lib), array('jquery'), $this->util->get_plugin_version());
 		wp_enqueue_style($this->add_prefix('style'), $this->get_theme_style(), array(), $this->util->get_plugin_version());
 	}
@@ -1103,13 +1104,13 @@ class SLB_Lightbox extends SLB_Base {
 			$options['relAttribute'][] = $this->attr_legacy;
 			
 		//Load UI Strings
-		if ( ($strings = $this->build_strings()) && !empty($strings) )
-			$options['strings'] = $strings;
+		if ( ($strings = $this->build_labels()) && !empty($strings) )
+			$options['labels'] = $strings;
 		//Load Layout
 		$options['layout'] = $this->get_theme_layout();
 
 		//Build client output
-		echo $this->util->build_script_element($this->util->call_client_method('initialize', $options), 'init', true, true);
+		echo $this->util->build_script_element($this->util->call_client_method('init', $options), 'init', true, true);
 		echo PHP_EOL . '<!-- /SLB -->' . PHP_EOL;
 	}
 	
@@ -1279,7 +1280,7 @@ class SLB_Lightbox extends SLB_Base {
 	 * Build JS object of UI strings when initializing lightbox
 	 * @return array UI strings
 	 */
-	function build_strings() {
+	function build_labels() {
 		$ret = array();
 		//Get all UI options
 		$prefix = 'txt_';
