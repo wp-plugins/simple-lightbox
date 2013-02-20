@@ -41,6 +41,11 @@ Options for customizing the lightbox behavior are located in the **Settings > Me
 
 * For more usage tips, go to [Simple Lightbox's official page](http://archetyped.com/tools/simple-lightbox/)
 
+#### Support
+Found a bug or otherwise experiencing an issue with Simple Lightbox?  [Report the issue here][issue-report]
+
+[issue-report]: https://github.com/archetyped/simple-lightbox/wiki/Reporting-Issues "Report an issue"
+
 == Installation ==
 
 1. Install and activate SLB
