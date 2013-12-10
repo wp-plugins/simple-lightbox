@@ -21,9 +21,9 @@ Class.extend = function(members) {
 	var proto = new this();
 	c_init = false;
 	
-	var val; 
+	var val, name; 
 	//Scrub prototype objects (Decouple from super class)
-	for ( var name in proto ) {
+	for ( name in proto ) {
 		if ( $.isPlainObject(proto[name]) ) {
 			val = $.extend({}, proto[name]);
 			proto[name] = val;
@@ -31,23 +31,24 @@ Class.extend = function(members) {
 	}
 	
 	//Copy members
-	for ( var name in members ) {
+	var make_handler = function(nm, fn) {
+		return function() {
+			//Cache super variable
+			var tmp = this._super;
+			//Set variable to super class method
+			this._super = _super[nm];
+			//Call method
+			var ret = fn.apply(this, arguments);
+			//Restore super variable
+			this._super = tmp;
+			//Return value
+			return ret;
+		};
+	};
+	for ( name in members ) {
 		//Evaluate function members (if overwriting super class method)
-		if ( 'function' == typeof members[name] && 'function' == typeof _super[name] ) {
-			proto[name] = (function(name, fn) {
-				return function() {
-					//Cache super variable
-					var tmp = this._super;
-					//Set variable to super class method
-					this._super = _super[name];
-					//Call method
-					var ret = fn.apply(this, arguments);
-					//Restore super variable
-					this._super = tmp;
-					//Return value
-					return ret;
-				}
-			})(name, members[name]);
+		if ( 'function' === typeof members[name] && 'function' === typeof _super[name] ) {
+			proto[name] = make_handler(name, members[name]);
 		} else {
 			val = members[name];
 			if ( $.isPlainObject(members[name]) ) {
@@ -78,7 +79,7 @@ Class.extend = function(members) {
 	//Set constructor
 	Class.prototype.constructor = Class;
 	
-	Class.extend = arguments.callee;
+	Class.extend = this.extend;
 	
 	//Return function
 	return Class;
@@ -102,8 +103,9 @@ var Base = {
 	},
 	
 	_set_parent: function(p) {
-		if ( typeof p != 'undefined' )
+		if ( typeof p !== 'undefined' ) {
 			this._parent = p;
+		}
 		this.util._parent = this;
 	},
 	
@@ -115,8 +117,8 @@ var Base = {
 	 * > other: Simple data object
 	 */
 	attach: function(member, data, simple) {
-		simple = ( typeof simple == undefined ) ? false : !!simple;
-		if ( $.type(member) == 'string' && $.isPlainObject(data) ) {
+		simple = ( typeof simple === undefined ) ? false : !!simple;
+		if ( $.type(member) === 'string' && $.isPlainObject(data) ) {
 			//Add initial member
 			var obj = {};
 			if ( simple ) {
@@ -126,8 +128,8 @@ var Base = {
 			} else {
 				//Add new instance object
 				data['_parent'] = this;
-				var c = this.Class.extend(data);
-				this[member] = new c();
+				var C = this.Class.extend(data);
+				this[member] = new C();
 			}
 		}
 	},
@@ -165,7 +167,7 @@ var Base = {
 				var p = this.get_parent();
 				var p_last = null;
 				//Iterate through parents
-				while ( !p.base && p_last != p && p._parent ) {
+				while ( !p.base && p_last !== p && p._parent ) {
 					p_last = p;
 					p = p._parent;
 				}
@@ -265,7 +267,7 @@ var Base = {
 				return pre; 
 			}
 			//Process
-			if ( val.indexOf(pre + sep) == -1 ) {
+			if ( val.indexOf(pre + sep) === -1 ) {
 				val = [pre, val].join(sep);
 			}
 			return val;
@@ -280,8 +282,9 @@ var Base = {
 		get_context: function() {
 			//Valid context
 			var b = this.get_base();
-			if ( !$.isArray(b.context) )
+			if ( !$.isArray(b.context) ) {
 				b.context = [];
+			}
 			//Return context
 			return b.context;
 		},
@@ -296,8 +299,9 @@ var Base = {
 		is_context: function(ctx) {
 			var ret = false;
 			//Validate context
-			if ( typeof ctx == 'string' )
+			if ( typeof ctx === 'string' ) {
 				ctx = [ctx];
+			}
 			if ( $.isArray(ctx) && this.arr_intersect(this.get_context(), ctx).length ) {
 				ret = true;
 			}
@@ -307,18 +311,18 @@ var Base = {
 		/* Helpers */
 
 		is_set: function(value) {
-			return ( $.type(value) != 'undefined' ) ? true : false;
+			return ( $.type(value) !== 'undefined' ) ? true : false;
 		},
 		
 		is_type: function(value, type, nonempty) {
 			var ret = false;
-			if ( this.is_set(value) && null != value && this.is_set(type) ) {
+			if ( this.is_set(value) && null !== value && this.is_set(type) ) {
 				switch ( $.type(type) ) {
 					case this.func:
 						ret = ( value instanceof type ) ? true : false;
 						break;
 					case this.string:
-						ret = ( $.type(value) == type ) ? true : false;
+						ret = ( $.type(value) === type ) ? true : false;
 						break;
 					default:
 						ret = false;
@@ -327,7 +331,7 @@ var Base = {
 			}
 			
 			//Validate empty values
-			if ( ret && ( $.type(nonempty) != this.bool || nonempty ) ) {
+			if ( ret && ( $.type(nonempty) !== this.bool || nonempty ) ) {
 				ret = !this.is_empty(value);
 			}
 			return ret;
@@ -407,7 +411,7 @@ var Base = {
 					switch ( type ) {
 						case this.string:
 						case this.array:
-							if ( value.length == 0 ) {
+							if ( value.length === 0 ) {
 								ret = true;
 							}
 							break;
@@ -432,7 +436,7 @@ var Base = {
 		 * @return bool TRUE if object is Promise/Deferred, FALSE otherwise
 		 */
 		is_promise: function(obj) {
-			return ( this.is_obj(obj) && this.is_method(obj, ['then', 'done', 'always', 'fail', 'pipe']) )
+			return ( this.is_obj(obj) && this.is_method(obj, ['then', 'done', 'always', 'fail', 'pipe']) );
 		},
 		
 		/**
@@ -463,16 +467,16 @@ var Base = {
 			var params = [],
 				ph = '%s';
 			//Stop processing if no replacement values specified or format string contains no placeholders
-			if ( arguments.length < 2 || fmt.indexOf(ph) == -1 ) {
+			if ( arguments.length < 2 || fmt.indexOf(ph) === -1 ) {
 				return fmt;
 			}
 			//Get replacement values
 			params = Array.prototype.slice.call(arguments, 1);
-			
+			val = null;
 			//Replace placeholders in string with parameters
 			
 			//Replace all placeholders at once if single parameter set
-			if ( params.length == 1 ) {
+			if ( params.length === 1 ) {
 				fmt = fmt.replace(ph, params[0].toString());
 			} else {
 				var idx = 0,
@@ -525,7 +529,7 @@ var Base = {
 		 */
 		arr_intersect: function(arr1, arr2) {
 			var ret = [];
-			if ( arr1 == arr2 ) {
+			if ( arr1 === arr2 ) {
 				return arr2;
 			}
 			if ( !$.isArray(arr2) || !arr2.length || !arr1.length ) {
@@ -546,8 +550,9 @@ var Base = {
 			for ( var x = 0; x < a1.length; x++ ) {
 				//Add mutual elements into intersection array
 				val = a1[x];
-				if ( a2.indexOf(val) != -1 && ret.indexOf(val) == -1 )
+				if ( a2.indexOf(val) !== -1 && ret.indexOf(val) === -1 ) {
 					ret.push(val);
+				}
 			}
 			
 			//Return intersection results
@@ -585,6 +590,6 @@ var SLB_Core = SLB_Base.extend(Core);
 
 this.SLB = new SLB_Core();
 
-SLB.setup_client();
+this.SLB.setup_client();
 
 })(jQuery);}

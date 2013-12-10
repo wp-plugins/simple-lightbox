@@ -4,10 +4,10 @@
  * @subpackage View
  * @author Archetyped
  */
-
+/* global SLB */
 if ( jQuery ){(function ($) {
 
-if ( typeof SLB == 'undefined' || !SLB.attach ) {
+if ( typeof SLB === 'undefined' || !SLB.attach ) {
 	return false;
 }
 
@@ -134,12 +134,12 @@ var View = {
 	
 	init_components: function() {
 		this.collections = {
-			'viewers':	 			this.Viewer,
+			'viewers':				this.Viewer,
 			'items':				this.Content_Item,
-			'content_handlers': 	this.Content_Handler,
-			'groups': 				this.Group,
-			'themes': 				this.Theme,
-			'template_tags': 		this.Template_Tag
+			'content_handlers':		this.Content_Handler,
+			'groups':				this.Group,
+			'themes':				this.Theme,
+			'template_tags':		this.Template_Tag
 		};
 		
 		this.component_defaults = [
@@ -153,7 +153,7 @@ var View = {
 	component_make_default: function(type) {
 		var ret = false;
 		for ( var x = 0; x < this.component_defaults.length; x++ ) {
-			if ( type == this.component_defaults[x] ) {
+			if ( type === this.component_defaults[x] ) {
 				ret = true;
 				break;
 			}
@@ -181,7 +181,7 @@ var View = {
 		if ( this.util.is_func(type) ) {
 			//Determine collection
 			for ( var coll in this.collections ) {
-				if ( type == this.collections[coll] && coll in this ) {
+				if ( type === this.collections[coll] && coll in this ) {
 					ret = this[coll];
 					break;
 				}
@@ -251,7 +251,7 @@ var View = {
 			options = {};
 		}
 		//Check if specialized method exists for component type
-		var m = ( 'component' != type.prototype._slug ) ? 'add_' + type.prototype._slug : null;
+		var m = ( 'component' !== type.prototype._slug ) ? 'add_' + type.prototype._slug : null;
 		if ( !this.util.is_empty(m) && ( m in this ) && this.util.is_func(this[m]) ) {
 			ret = this[m](id, options);
 		}
@@ -512,12 +512,11 @@ var View = {
 		if ( !this.util.is_type(item, this.Content_Item) ) {
 			return ret;
 		}
-		var prop = 'items';
 		var items = this.get_items();
 		//Check if item exists in collection
 		ret = $.inArray(item, items);
 		//Cache item
-		if ( -1 == ret ) {
+		if ( -1 === ret ) {
 			ret = items.push(item) - 1;
 		}
 		//Return item index in cache
@@ -633,7 +632,6 @@ var View = {
 	 * @return obj Theme model
 	 */
 	extend_theme: function(id, attr) {
-		var t = this;
 		//Validate
 		if ( !this.util.is_string(id) ) {
 			return false;
@@ -647,7 +645,7 @@ var View = {
 		//Create default attributes for new theme
 		if ( this.util.is_empty(model) ) {
 			//Default
-			var model = {'parent': null, 'id': id};
+			model = {'parent': null, 'id': id};
 			//Save theme model
 			this.Theme.prototype._models[id] = model;
 		}
@@ -953,7 +951,7 @@ var Component = {
 	 */
 	check_id: function(id, nonempty) {
 		//Validate
-		if ( arguments.length == 1 && this.util.is_bool(arguments[0]) ) {
+		if ( arguments.length === 1 && this.util.is_bool(arguments[0]) ) {
 			nonempty = arguments[0];
 			id = null;
 		}
@@ -1051,11 +1049,11 @@ var Component = {
 	 */
 	check_component: function(comp, ctype) {
 		//Validate
-		if ( this.util.is_empty(comp)
-			|| ( this.util.is_obj(comp) && !this.util.is_func(ctype) )
-			|| ( this.util.is_string(comp) && !this.has_reference(comp) )
-			|| ( this.util.is_empty(ctype) && !this.util.is_string(comp) )
-			|| ( !this.util.is_obj(comp) && !this.util.is_string(comp) )
+		if ( this.util.is_empty(comp) ||
+			( this.util.is_obj(comp) && !this.util.is_func(ctype) ) ||
+			( this.util.is_string(comp) && !this.has_reference(comp) ) ||
+			( this.util.is_empty(ctype) && !this.util.is_string(comp) ) ||
+			( !this.util.is_obj(comp) && !this.util.is_string(comp) )
 		) {
 			return false;
 		}
@@ -1077,7 +1075,7 @@ var Component = {
 	 *   > Check if property already set
 	 *   > Check attributes
 	 *   > Check container object(s)
-	 * 	 > Check parent object (controller)
+	 *   > Check parent object (controller)
 	 * @uses _containers to check potential container components for references
 	 * @param string cname Component name
 	 * @param bool check_attr (optional) Whether or not to check instance attributes for component (Default: TRUE)
@@ -1126,7 +1124,7 @@ var Component = {
 			for ( var i = 0; i < containers.length; i++ ) {
 				con = containers[i];
 				//Validate container
-				if ( con == cname ) {
+				if ( con === cname ) {
 					continue;
 				}
 				//Retrieve container
@@ -1252,7 +1250,7 @@ var Component = {
 			if ( this.util.is_obj(opts) ) {
 				var attr_prefix = this.util.get_attribute();
 				$.each(opts, function(idx, opt) {
-					if ( opt.name.indexOf( attr_prefix ) == -1 ) {
+					if ( opt.name.indexOf( attr_prefix ) === -1 ) {
 						return true;
 					}
 					//Process custom attributes
@@ -1338,7 +1336,7 @@ var Component = {
 		attr = this.get_attribute(attr);
 		if ( this.util.is_func(attr) ) {
 			//Get arguments
-			var args = Array.prototype.slice.call(arguments, 1);
+			args = Array.prototype.slice.call(arguments, 1);
 			//Pass arguments to user-defined method
 			attr = attr.apply(this, args);
 		}
@@ -1459,8 +1457,8 @@ var Component = {
 	 * Wrapper element created and added to main DOM element if not yet created
 	 * @param string element ID for DOM element (Used as class name for wrapper)
 	 * @param string|jQuery|obj content Content to add to DOM (Object contains element properties)
-	 * 	> tag 		: Element tag name
-	 * 	> content	: Element content
+	 *  > tag		: Element tag name
+	 *  > content	: Element content
 	 * @return jQuery Inserted element(s)
 	 */
 	dom_put: function(element, content) {
@@ -1475,7 +1473,7 @@ var Component = {
 			'tag': 'div',
 			'content': '',
 			'class': this.add_ns(element)
-		}
+		};
 		//Setup content
 		if ( !this.util.is_empty(content) ) {
 			if ( this.util.is_type(content, jQuery, false) || this.util.is_string(content, false) ) {
@@ -1590,8 +1588,8 @@ var Component = {
 	 * Event handlers are executed in the context of the current component instance
 	 * Event handlers are passed parameters
 	 * > ev			(obj)	Event object
-	 * 	> type		(string)	Event name
-	 * 	> data		(mixed)		Data to pass to handlers (if supplied)
+	 *  > type		(string)	Event name
+	 *  > data		(mixed)		Data to pass to handlers (if supplied)
 	 * > component	(obj)	Current component instance
 	 * @param string event Custom event to trigger
 	 * @param mixed data (optional) Data to pass to event handlers
@@ -1734,7 +1732,9 @@ var Viewer = {
 				t.trigger('item-change');
 			})
 			.on(['close', 'item-change'], function() {
-				t.unlock();
+				t.unload().done(function() {
+					t.unlock();
+				});
 			});
 	},
 	
@@ -1965,7 +1965,7 @@ var Viewer = {
 			v.set_active();
 			//Display
 			v.render();
-		}
+		};
 		if ( !this.is_locked() ) {
 			fin();
 		} else if ( !this.get_status(fin_set) ) {
@@ -1990,7 +1990,7 @@ var Viewer = {
 			//Reset count
 			this.history_set(0);
 			//Close viewer
-			if ( -1 != count ) {
+			if ( -1 !== count ) {
 				this.close();
 			}	
 		}
@@ -2051,7 +2051,7 @@ var Viewer = {
 	 * @return bool TRUE if viewer is open, FALSE otherwise 
 	 */
 	is_open: function() {
-		return ( this.dom_get().css('display') == 'none' ) ? false : true;
+		return ( this.dom_get().css('display') === 'none' ) ? false : true;
 	},
 	
 	/**
@@ -2098,7 +2098,7 @@ var Viewer = {
 							v.open = true;
 						})
 						.fail(function() {
-							 set_pos();
+							set_pos();
 							//Fallback open
 							v.get_overlay().show();
 							v.dom_get().show();
@@ -2130,7 +2130,7 @@ var Viewer = {
 						//Autofit content
 						if ( v.get_attribute('autofit', true) ) {
 							var dims = $.extend({'display': 'inline-block'}, thm.get_item_dimensions());
-							var tag = thm.dom_get_tag('item', 'content').css(dims);
+							thm.dom_get_tag('item', 'content').css(dims);
 						}
 					})
 					.always(function() {
@@ -2255,8 +2255,15 @@ var Viewer = {
 		return $(o);
 	},
 	
+	/**
+	 * Unload viewer
+	 */
 	unload: function() {
-		
+		var dfr = $.Deferred();
+		//Unload item data
+		this.get_theme().dom_get_tag('item').text('');
+		dfr.resolve();
+		return dfr.promise();
 	},
 	
 	/**
@@ -2313,7 +2320,7 @@ var Viewer = {
 		var v = this;
 		var close = function() {
 			v.close();
-		}
+		};
 		//Layout
 		l.click(close);
 		//Overlay
@@ -2341,7 +2348,7 @@ var Viewer = {
 		var v = this;
 		var h = function(ev) {
 			return v.keys_control(ev);
-		}
+		};
 		if ( mode ) {
 			$(document).on(e, h);
 		} else {
@@ -2660,14 +2667,14 @@ var Group = {
 		if ( !this.util.is_type(item, View.Content_Item) ) {
 			item = this.get_current();
 		}
-		if ( this.get_size() == 1 ) {
+		if ( this.get_size() === 1 ) {
 			return item;
 		}
 		var next = null;
 		var pos = this.get_pos(item);
-		if ( pos != -1 ) {
+		if ( pos !== -1 ) {
 			pos = ( pos + 1 < this.get_size() ) ? pos + 1 : 0;
-			if ( 0 != pos || item.get_viewer().get_attribute('loop') ) {
+			if ( 0 !== pos || item.get_viewer().get_attribute('loop') ) {
 				next = this.get_item(pos);
 			}
 		}
@@ -2679,13 +2686,13 @@ var Group = {
 		if ( !this.util.is_type(item, View.Content_Item) ) {
 			item = this.get_current();
 		}
-		if ( this.get_size() == 1 ) {
+		if ( this.get_size() === 1 ) {
 			return item;
 		}
 		var prev = null;
 		var pos = this.get_pos(item);
-		if ( pos != -1 && ( 0 != pos || item.get_viewer().get_attribute('loop') ) ) {
-			if ( pos == 0 ) {
+		if ( pos !== -1 && ( 0 !== pos || item.get_viewer().get_attribute('loop') ) ) {
+			if ( pos === 0 ) {
 				pos = this.get_size();
 			}
 			pos -= 1;
@@ -2743,7 +2750,7 @@ var Group = {
 	},
 	
 	is_single: function() {
-		return ( this.get_size() == 1 );
+		return ( this.get_size() === 1 );
 	}
 };
 
@@ -2855,6 +2862,21 @@ var Content_Handler = {
 	/* Processing/Output */
 	
 	/**
+	 * Loads item data
+	 * @param obj item Content item to load data for
+	 * @return obj Promise that is resolved when item data is loaded
+	 */
+	load: function(item) {
+		var dfr = $.Deferred();
+		var ret = this.call_attribute('load', item, dfr);
+		//Handle missing load method
+		if ( null === ret ) {
+			dfr.resolve();
+		}
+		return dfr.promise();
+	},
+	
+	/**
 	 * Render output to display item
 	 * @param Content_Item item Item to render output for
 	 * @return obj jQuery.Promise that is resolved when item is rendered
@@ -2862,19 +2884,7 @@ var Content_Handler = {
 	render: function(item) {
 		var dfr = $.Deferred();
 		//Validate
-		var ret = this.call_attribute('render', item);
-		if ( this.util.is_promise(ret) ) {
-			ret.done(function(output) {
-				dfr.resolve(output);
-			});
-		} else {
-			//String format
-			if ( this.util.is_string(ret) ) {
-				ret = this.util.format(ret, item.get_uri());
-			}
-			//Resolve deferred immediately
-			dfr.resolve(ret);
-		}
+		this.call_attribute('render', item, dfr);
 		return dfr.promise();
 	}
 };
@@ -2916,6 +2926,7 @@ var Content_Item = {
 	/* Properties */
 	
 	data: null,
+	loaded: null,
 	
 	/* Init */
 	
@@ -2947,27 +2958,25 @@ var Content_Item = {
 			var attrs = [{}, this._attr_default, {'permalink': key}];
 			if ( this.util.is_obj(assets) ) {
 				var t = this;
-				var get_assets = function(key, raw) {
+				/**
+				 * Retrieve item assets
+				 * Handles variant items as well (Retrieves parent item assets)
+				 * @param string key Item URI
+				 * @return obj Item assets (Empty if no match)
+				 */
+				var get_assets = function(key) {
 					var ret = {};
 					if ( key in assets && t.util.is_obj(assets[key]) ) {
-						var ret = assets[key];
-						if ( t.util.is_string(raw) ) {
-							var e = '_entries';
-							if ( !( e in ret ) || -1 == $.inArray(raw, ret[e]) ) {
-								ret = {};
-							}
+						ret = assets[key];
+						//Handle variants
+						if ( '_parent' in ret ) {
+							ret = get_assets(ret._parent);
 						}
 					}
 					return ret;
 				};
-				var asset = get_assets(key);
-				if ( this.util.is_empty(asset) && ( kpos = key.indexOf('?') ) && kpos != -1 ) {
-					var key_base = key.substr(0, kpos);
-					asset = get_assets(key_base, key); 
-				}
-				if ( !this.util.is_empty(asset) ) {
-					attrs.push(asset);
-				}
+				//Save assets
+				attrs.push(get_assets(key));
 			}
 			this._attr_default = $.extend.apply(this, attrs);
 		}
@@ -3036,13 +3045,13 @@ var Content_Item = {
 	 */
 	get_uri: function(mode) {
 		//Validate
-		if ( $.inArray(mode ,['source', 'permalink']) == -1 ) {
+		if ( $.inArray(mode ,['source', 'permalink']) === -1 ) {
 			mode = 'source';
 		}
 		//Retrieve URI
 		var ret = this.get_attribute(mode);
 		if ( !this.util.is_string(ret) ) {
-			ret = ( 'source' == mode ) ? this.get_attribute('permalink') : '';
+			ret = ( 'source' === mode ) ? this.get_attribute('permalink') : '';
 		}
 		return ret;
 	},
@@ -3124,6 +3133,10 @@ var Content_Item = {
 		this.data = data;
 	},
 	
+	get_data: function() {
+		return this.data;
+	},
+	
 	/**
 	 * Determine gallery type
 	 * @return string|null Gallery type ID (NULL if item not in gallery)
@@ -3161,7 +3174,7 @@ var Content_Item = {
 			return true;
 		}
 		//Check for specific gallery type
-		return ( gType == type ) ? true : false;
+		return ( gType === type ) ? true : false;
 	},
 	
 	/*-** Component References **-*/
@@ -3275,8 +3288,24 @@ var Content_Item = {
 		//Retrieve viewer
 		var v = this.get_viewer();
 		//Load item
+		this.load();
 		var ret = v.show(this);
 		return ret;
+	},
+	
+	/**
+	 * Load item data
+	 * 
+	 * Retrieves item data from external sources (if necessary)
+	 * @uses this.loaded to save loaded state
+	 * @return obj Promise that is resolved when item data is loaded
+	 */
+	load: function() {
+		if ( !this.util.is_promise(this.loaded) ) {
+			//Load item data (via content handler)
+			this.loaded = this.get_type().load(this);
+		}
+		return this.loaded.promise();
 	},
 	
 	reset: function() {
@@ -3434,8 +3463,8 @@ var Modeled_Component = {
 		if ( !this.util.is_bool(safe_mode) ) {
 			safe_mode = true;
 		}
-		var mcurr;
-		var m = mcurr = this.get_model();
+		var mcurr = this.get_model();
+		var m = mcurr;
 		var found = false;
 		while ( this.util.is_obj(m) ) {
 			//Check if attribute exists in model
@@ -3501,7 +3530,7 @@ var Theme = {
 	 */
 	_c: function(id, attributes, viewer) {
 		//Validate
-		if ( arguments.length == 1 && this.util.is_type(arguments[0], View.Viewer) ) {
+		if ( arguments.length === 1 && this.util.is_type(arguments[0], View.Viewer) ) {
 			viewer = arguments[0];
 			id = null;
 		}
@@ -3596,7 +3625,7 @@ var Theme = {
 			//Retrieve matching theme model
 			var models = this.get_models();
 			if ( !this.util.is_string(id) ) {
-				var id = this.get_parent().get_option('theme_default');
+				id = this.get_parent().get_option('theme_default');
 			}
 			//Select first theme model if specified model is invalid
 			if ( !this.util.in_obj(models, id) ) {
@@ -3672,7 +3701,7 @@ var Theme = {
 		var item = this.get_viewer().get_item();
 		var w = $(window);
 		//Check cache freshness
-		if ( !( status in cache ) || !this.util.is_obj(cache[status]) || cache[status].width != w.width() || cache[status].height != w.height() ) {
+		if ( !( status in cache ) || !this.util.is_obj(cache[status]) || cache[status].width !== w.width() || cache[status].height !== w.height() ) {
 				cache = {};
 		}
 		if ( this.util.is_empty(cache) ) {
@@ -3685,7 +3714,7 @@ var Theme = {
 		}
 		//Retrieve cached values
 		var pos = $.inArray(item, cache[status].index);
-		if ( pos != -1 && pos in cache ) {
+		if ( pos !== -1 && pos in cache ) {
 			meas = cache[pos];
 		}
 		//Generate measurement
@@ -3821,7 +3850,7 @@ var Theme = {
 			var factor = Math.min(max.width / dims.width, max.height / dims.height);
 			//Resize dimensions
 			if ( factor < 1 ) {
-				$.each(dims, function(key, val) {
+				$.each(dims, function(key) {
 					dims[key] = Math.round(dims[key] * factor);
 				});
 			}
@@ -3836,7 +3865,7 @@ var Theme = {
 	get_dimensions: function() {
 		var dims = this.get_item_dimensions();
 		var offset = this.get_offset();
-		$.each(dims, function(key, val) {
+		$.each(dims, function(key) {
 			dims[key] += offset[key];
 		});
 		return dims;
@@ -3884,7 +3913,7 @@ var Theme = {
 						el.stop(false, true);
 					}
 				});
-			}
+			};
 			//Stop queued animations
 			if ( !!clear_queue ) {
 				anim_stop();
@@ -4028,7 +4057,7 @@ var Template = {
 				var tags = this.get_tags(),
 					tag_promises = [];
 				//Render Tag output
-				loading_promise.done(function() {
+				$.when(item.load(), loading_promise).done(function() {
 					if ( !v.is_active() ) {
 						return false;
 					}
@@ -4120,7 +4149,7 @@ var Template = {
 		var tag_temp = new View.Template_Tag();
 		var cls = tag_temp.get_class();
 		var cls_new = ['x', cls].join('_');
-		$(tag_temp.get_selector(), dom).each(function(idx) {
+		$(tag_temp.get_selector(), dom).each(function() {
 			//Replace matching class name with blocking class
 			$(this).removeClass(cls).addClass(cls_new);
 		});
@@ -4128,6 +4157,8 @@ var Template = {
 		switch ( rtype ) {
 			case 'string' :
 				dom = dom.wrap('<div />').parent().html();
+				l = dom;
+				break;
 			default :
 				l = dom;
 		}
@@ -4169,7 +4200,7 @@ var Template = {
 	get_tag_container: function(tag) {
 		//Build element
 		var attr = this.get_tag_attribute();
-		return this.util.format('<span %s="%s"></span>', attr, escape(tag)); 
+		return this.util.format('<span %s="%s"></span>', attr, encodeURI(tag)); 
 	},
 	
 	get_tag_attribute: function() {
@@ -4213,10 +4244,10 @@ var Template = {
 			var attr = this.get_tag_attribute();
 			var nodes = $(d).find('[' + attr + ']');
 			//Build tag instances from nodes
-			$(nodes).each(function(idx) {
+			$(nodes).each(function() {
 				//Get tag placeholder
 				var el = $(this);
-				var tag = new View.Template_Tag(unescape(el.attr(attr)));
+				var tag = new View.Template_Tag(decodeURI(el.attr(attr)));
 				//Populate valid tags
 				if ( tag.has_handler() ) {
 					//Add tag to array
@@ -4243,9 +4274,9 @@ var Template = {
 			var tc = null;
 			for ( var x = 0; x < tags.length; x++ ) {
 				tc = tags[x];
-				if ( name == tc.get_name() ) {
+				if ( name === tc.get_name() ) {
 					//Check tag property
-					if ( !prop || prop == tc.get_prop() ) {
+					if ( !prop || prop === tc.get_prop() ) {
 						tags_filtered.push(tc);
 					}
 				}
@@ -4349,7 +4380,7 @@ var Template_Tag = {
 		//Get tag ID
 		attrs.name = parts[0];
 		//Get main property
-		if ( attrs.name.indexOf('.') != -1 ) {
+		if ( attrs.name.indexOf('.') !== -1 ) {
 			attrs.name = attrs.name.split('.', 2);
 			attrs.prop = attrs.name[1];
 			attrs.name = attrs.name[0];
@@ -4371,7 +4402,7 @@ var Template_Tag = {
 	 * @param Content_Item item
 	 * @return obj jQuery.Promise object that is resolved when tag is rendered
 	 * Parameters passed to callbacks
-	 * > tag 	obj		Current tag instance
+	 * > tag	obj		Current tag instance
 	 * > output	string	Tag output
 	 */
 	render: function(item) {
