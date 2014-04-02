@@ -12,6 +12,8 @@ The highly customizable lightbox for WordPress
 == Description ==
 Simple Lightbox is a very simple and customizable lightbox that is easy to add to your WordPress website.
 
+**UPDATE:** Simple Lightbox 2.3 Beta now available [Download it today!](http://archetyped.com/lab/slb-2_3_0-beta/)
+
 #### Features
 Options for customizing the lightbox behavior are located in the **Appearance > Lightbox** admin menu (or just click the **Settings** link below the plugin's name when viewing the list of installed plugins)
 
