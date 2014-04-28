@@ -10,6 +10,8 @@ Stable tag: trunk
 The highly customizable lightbox for WordPress
 
 == Description ==
+[**New: Simple Lightbox 2.4 is here - Get the Beta Now!**](http://archetyped.com/?p=1517)
+
 Simple Lightbox is a very simple and customizable lightbox that is easy to add to your WordPress website.
 
 #### Features
